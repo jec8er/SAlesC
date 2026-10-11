@@ -30,3 +30,12 @@ test('invalid review fails visibly and releases work',async()=>{
 test('no inference adapter is reported, not simulated',async()=>{
  await assert.rejects(runCycle({id:'d',task:'improve'}),/not connected/);
 });
+test('abort releases a claim even when the inference adapter ignores its signal',async()=>{
+ const f=fixture([]); const controller=new AbortController();
+ const pending=new Promise(()=>{});
+ const cycle=runCycle({id:'e',task:'bounded work',store:f.store,infer:async()=>pending,signal:controller.signal});
+ controller.abort(new DOMException('deadline','TimeoutError'));
+ await assert.rejects(cycle,e=>e?.name==='TimeoutError');
+ f.infer=async()=>{throw Error('adapter called after released claim')};
+ await assert.rejects(runCycle({id:'e',task:'bounded work',...f}),/adapter called/);
+});
