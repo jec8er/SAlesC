@@ -253,24 +253,45 @@ test("production startup requires HTTPS origin and uses secure session cookies",
   }
 });
 test("authenticated task status is private, bounded and redacted", async () => {
-  const inspect = async (id: string) => id === "known"
-    ? { exists: true, status: "checkpointed", checkpointCount: 2, updatedAt: "2026-10-11T09:00:00.000Z", resultStatus: null }
-    : { exists: false, status: "missing", checkpointCount: 0 };
+  const inspect = async (id: string) =>
+    id === "known"
+      ? {
+          exists: true,
+          status: "checkpointed",
+          checkpointCount: 2,
+          updatedAt: "2026-10-11T09:00:00.000Z",
+          resultStatus: null,
+        }
+      : { exists: false, status: "missing", checkpointCount: 0 };
   const s = await running(":memory:", { ecomodaStore: { inspect } });
   try {
-    assert.equal((await fetch(s.origin + "/api/ecomoda/tasks/known")).status, 401);
+    assert.equal(
+      (await fetch(s.origin + "/api/ecomoda/tasks/known")).status,
+      401,
+    );
     const a = await login(s.origin);
     const headers = { Cookie: a.cookie };
     let r = await fetch(s.origin + "/api/ecomoda/tasks/known", { headers });
     assert.equal(r.status, 200);
-    const body = await r.json() as { task: Record<string, unknown> };
-    assert.deepEqual(body.task, { id: "known", exists: true, status: "checkpointed", checkpointCount: 2, updatedAt: "2026-10-11T09:00:00.000Z", resultStatus: null });
+    const body = (await r.json()) as { task: Record<string, unknown> };
+    assert.deepEqual(body.task, {
+      id: "known",
+      exists: true,
+      status: "checkpointed",
+      checkpointCount: 2,
+      updatedAt: "2026-10-11T09:00:00.000Z",
+      resultStatus: null,
+    });
     assert.equal(JSON.stringify(body).includes("output"), false);
     r = await fetch(s.origin + "/api/ecomoda/tasks/missing", { headers });
     assert.equal(r.status, 404);
-    r = await fetch(s.origin + "/api/ecomoda/tasks/%2e%2e%2fsecret", { headers });
+    r = await fetch(s.origin + "/api/ecomoda/tasks/%2e%2e%2fsecret", {
+      headers,
+    });
     assert.ok([400, 404].includes(r.status));
-  } finally { await s.close(); }
+  } finally {
+    await s.close();
+  }
 });
 test("cycle creation requires configured inference and returns only redacted state", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ecomoda-api-"));
@@ -278,20 +299,52 @@ test("cycle creation requires configured inference and returns only redacted sta
   let s = await running(":memory:", { ecomodaStore: store });
   try {
     const a = await login(s.origin);
-    const headers = { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf };
-    let r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers, body: JSON.stringify({ id: "job", task: "private work" }) });
+    const headers = {
+      "Content-Type": "application/json",
+      Cookie: a.cookie,
+      "X-CSRF-Token": a.csrf,
+    };
+    let r = await fetch(s.origin + "/api/ecomoda/tasks", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ id: "job", task: "private work" }),
+    });
     assert.equal(r.status, 503);
     await s.close();
-    const outputs = ["plan secret", "draft secret", '{"accepted":true,"defects":[]}'];
-    s = await running(":memory:", { ecomodaStore: store, ecomodaInfer: async () => outputs.shift()! });
+    const outputs = [
+      "plan secret",
+      "draft secret",
+      '{"accepted":true,"defects":[]}',
+    ];
+    s = await running(":memory:", {
+      ecomodaStore: store,
+      ecomodaInfer: async () => outputs.shift()!,
+    });
     const b = await login(s.origin);
-    const authorized = { "Content-Type": "application/json", Cookie: b.cookie, "X-CSRF-Token": b.csrf };
-    r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers: authorized, body: JSON.stringify({ id: "job", task: "private work" }) });
+    const authorized = {
+      "Content-Type": "application/json",
+      Cookie: b.cookie,
+      "X-CSRF-Token": b.csrf,
+    };
+    r = await fetch(s.origin + "/api/ecomoda/tasks", {
+      method: "POST",
+      headers: authorized,
+      body: JSON.stringify({ id: "job", task: "private work" }),
+    });
     assert.equal(r.status, 201);
     const text = await r.text();
     assert.equal(text.includes("secret"), false);
-    assert.deepEqual(JSON.parse(text).task, { id: "job", status: "awaiting_artifact_validation", publishAllowed: false, verifiedRevenue: null });
-    r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers: authorized, body: JSON.stringify({ id: "job", task: "private work" }) });
+    assert.deepEqual(JSON.parse(text).task, {
+      id: "job",
+      status: "awaiting_artifact_validation",
+      publishAllowed: false,
+      verifiedRevenue: null,
+    });
+    r = await fetch(s.origin + "/api/ecomoda/tasks", {
+      method: "POST",
+      headers: authorized,
+      body: JSON.stringify({ id: "job", task: "private work" }),
+    });
     assert.equal(r.status, 409);
   } finally {
     await s.close();
@@ -302,13 +355,27 @@ test("a hung inference times out, releases its claim, and is retryable", async (
   const dir = mkdtempSync(join(tmpdir(), "ecomoda-timeout-"));
   const store = createFileStore(dir);
   const infer = async () => new Promise<string>(() => {});
-  const s = await running(":memory:", { ecomodaStore: store, ecomodaInfer: infer, ecomodaTimeoutMs: 20 });
+  const s = await running(":memory:", {
+    ecomodaStore: store,
+    ecomodaInfer: infer,
+    ecomodaTimeoutMs: 20,
+  });
   try {
     const a = await login(s.origin);
-    const headers = { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf };
-    const r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers, body: JSON.stringify({ id: "hung", task: "bounded work" }) });
+    const headers = {
+      "Content-Type": "application/json",
+      Cookie: a.cookie,
+      "X-CSRF-Token": a.csrf,
+    };
+    const r = await fetch(s.origin + "/api/ecomoda/tasks", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ id: "hung", task: "bounded work" }),
+    });
     assert.equal(r.status, 504);
-    assert.deepEqual(await r.json(), { error: "Ecomoda cycle timed out and can be retried" });
+    assert.deepEqual(await r.json(), {
+      error: "Ecomoda cycle timed out and can be retried",
+    });
     const summary = await store.inspect("hung");
     assert.equal(summary.status, "retryable_failure");
   } finally {
@@ -318,33 +385,78 @@ test("a hung inference times out, releases its claim, and is retryable", async (
 });
 test("project memory is authenticated, CSRF protected, validated and revision safe", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ecomoda-memory-api-"));
-  const s = await running(":memory:", { ecomodaMemory: createProjectMemoryStore(dir) });
+  const s = await running(":memory:", {
+    ecomodaMemory: createProjectMemoryStore(dir),
+  });
   try {
-    assert.equal((await fetch(s.origin + "/api/ecomoda/memory/orbit")).status, 401);
+    assert.equal(
+      (await fetch(s.origin + "/api/ecomoda/memory/orbit")).status,
+      401,
+    );
     const a = await login(s.origin);
     const readHeaders = { Cookie: a.cookie };
-    let r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { headers: readHeaders });
+    let r = await fetch(s.origin + "/api/ecomoda/memory/orbit", {
+      headers: readHeaders,
+    });
     assert.equal(r.status, 200);
-    const initial = await r.json() as { revision: number; memory: { schemaVersion: number } };
+    const initial = (await r.json()) as {
+      revision: number;
+      memory: { schemaVersion: number };
+    };
     assert.equal(initial.revision, 0);
     assert.equal(initial.memory.schemaVersion, 1);
     const memory = {
       schemaVersion: 1,
-      preferences: [{ area: "publishing", key: "publishing_paused", value: "Keep publishing paused pending quality approval.", updatedAt: "2026-10-11T15:00:00.000Z" }],
+      preferences: [
+        {
+          area: "publishing",
+          key: "publishing_paused",
+          value: "Keep publishing paused pending quality approval.",
+          updatedAt: "2026-10-11T15:00:00.000Z",
+        },
+      ],
       verifiedState: [],
       nextActions: [],
     };
     const body = JSON.stringify({ revision: 0, memory });
-    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body });
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: a.cookie,
+        "X-CSRF-Token": a.csrf,
+      },
+      body,
+    });
     assert.equal(r.status, 200);
-    assert.equal((await r.json() as { revision: number }).revision, 1);
-    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body });
+    assert.equal(((await r.json()) as { revision: number }).revision, 1);
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: a.cookie,
+        "X-CSRF-Token": a.csrf,
+      },
+      body,
+    });
     assert.equal(r.status, 409);
     const unsafe = { ...memory, biography: "personal profile" };
-    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body: JSON.stringify({ revision: 1, memory: unsafe }) });
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: a.cookie,
+        "X-CSRF-Token": a.csrf,
+      },
+      body: JSON.stringify({ revision: 1, memory: unsafe }),
+    });
     assert.equal(r.status, 400);
     assert.deepEqual(await r.json(), { error: "Project memory was rejected" });
-    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie }, body: JSON.stringify({ revision: 1, memory }) });
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: a.cookie },
+      body: JSON.stringify({ revision: 1, memory }),
+    });
     assert.equal(r.status, 403);
   } finally {
     await s.close();

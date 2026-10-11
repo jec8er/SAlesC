@@ -1,6 +1,11 @@
 export type EcomodaTaskSummary = {
   exists: boolean;
-  status: "missing" | "active" | "checkpointed" | "retryable_failure" | "completed";
+  status:
+    | "missing"
+    | "active"
+    | "checkpointed"
+    | "retryable_failure"
+    | "completed";
   checkpointCount: number;
   updatedAt?: string | null;
   resultStatus?: string | null;

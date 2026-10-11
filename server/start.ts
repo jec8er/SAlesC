@@ -10,8 +10,12 @@ const { app, close } = createApplication({
   name: process.env.OWNER_NAME || "Juan",
   production: process.env.NODE_ENV === "production",
   publicOrigin: process.env.PUBLIC_ORIGIN,
-  ecomodaStore: createFileStore(process.env.ECOMODA_STATE_DIR || "data/ecomoda"),
-  ecomodaMemory: createProjectMemoryStore(process.env.ECOMODA_MEMORY_DIR || "data/ecomoda-memory"),
+  ecomodaStore: createFileStore(
+    process.env.ECOMODA_STATE_DIR || "data/ecomoda",
+  ),
+  ecomodaMemory: createProjectMemoryStore(
+    process.env.ECOMODA_MEMORY_DIR || "data/ecomoda-memory",
+  ),
 });
 const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
   console.log(`SaborClick Studio listening on port ${port}`),

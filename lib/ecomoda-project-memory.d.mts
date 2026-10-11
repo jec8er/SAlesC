@@ -25,7 +25,11 @@ export type ProjectMemory = {
 export type ProjectMemoryRecord = { revision: number; memory: ProjectMemory };
 export type ProjectMemoryStore = {
   read(projectId: string): Promise<ProjectMemoryRecord>;
-  update(projectId: string, memory: ProjectMemory, expectedRevision: number): Promise<ProjectMemoryRecord>;
+  update(
+    projectId: string,
+    memory: ProjectMemory,
+    expectedRevision: number,
+  ): Promise<ProjectMemoryRecord>;
 };
 export function validateProjectMemory(input: unknown): ProjectMemory;
 export function createProjectMemoryStore(directory: string): ProjectMemoryStore;
