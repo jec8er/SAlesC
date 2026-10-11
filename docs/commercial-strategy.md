@@ -7,6 +7,7 @@ The source repositories contained a food-ordering HTML prototype in a README, a 
 WhatsApp already supports catalog/cart conversations, and Square already provides online ordering. The business hypothesis is therefore paid **implementation, content and handoff**, not charging solely for a basic catalog feature.
 
 Primary sources checked October 11, 2026:
+
 - https://faq.whatsapp.com/5495780857144067/
 - https://squareup.com/help/us/en/article/8566-set-up-an-online-ordering-profile
 

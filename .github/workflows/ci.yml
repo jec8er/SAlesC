@@ -1,0 +1,39 @@
+name: Validate and package application
+on:
+  push:
+    branches: [main, github-runtime]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test-build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - name: Package source and compiled frontend
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p release/studio
+          git archive --format=tar HEAD | tar -xf - -C release/studio
+          cp -R dist release/studio/dist
+      - name: Upload runnable package
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: saborclick-studio-independent
+          path: release/studio/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
