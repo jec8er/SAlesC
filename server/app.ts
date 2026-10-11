@@ -10,6 +10,7 @@ import { digest, verifyPassword, validPasswordHash } from "./auth.ts";
 import { runCycle } from "../lib/ecomoda-core.mjs";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
+import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
 export type Config = {
   databasePath: string;
   passwordHash: string;
@@ -21,6 +22,7 @@ export type Config = {
   ecomodaStore?: EcomodaFileStore;
   ecomodaInfer?: EcomodaInference;
   ecomodaTimeoutMs?: number;
+  ecomodaMemory?: ProjectMemoryStore;
 };
 export function createApplication(config: Config) {
   if (!validPasswordHash(config.passwordHash))
@@ -165,6 +167,43 @@ export function createApplication(config: Config) {
       .get("owner") as { payload: string; revision: number };
     res.json({ workspace: JSON.parse(row.payload), revision: row.revision });
   });
+  const projectId = /^[a-z0-9][a-z0-9_-]{0,79}$/;
+  app.get("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
+    if (!config.ecomodaMemory)
+      return res.status(503).json({ error: "Ecomoda project memory is not configured" });
+    const id = req.params.projectId;
+    if (typeof id !== "string" || !projectId.test(id))
+      return res.status(400).json({ error: "Invalid project ID" });
+    try {
+      const record = await config.ecomodaMemory.read(id);
+      res.json({ projectId: id, ...record });
+    } catch (error) { next(error); }
+  });
+  const memoryUpdate = z.object({
+    revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    memory: z.unknown(),
+  }).strict();
+  app.put("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
+    if (!config.ecomodaMemory)
+      return res.status(503).json({ error: "Ecomoda project memory is not configured" });
+    const id = req.params.projectId;
+    if (typeof id !== "string" || !projectId.test(id))
+      return res.status(400).json({ error: "Invalid project ID" });
+    const parsed = memoryUpdate.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid project memory update" });
+    try {
+      const record = await config.ecomodaMemory.update(id, parsed.data.memory as never, parsed.data.revision);
+      res.json({ projectId: id, ...record });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (/revision conflict|update is busy/.test(message))
+        return res.status(409).json({ error: "Project memory changed. Reload before saving." });
+      if (/memory|preferences|verifiedState|nextActions|credential|secret/.test(message))
+        return res.status(400).json({ error: "Project memory was rejected" });
+      next(error);
+    }
+  });
   app.get("/api/ecomoda/tasks/:id", auth, async (req, res, next) => {
     if (!config.ecomodaStore)
       return res.status(503).json({ error: "Ecomoda persistence is not configured" });
@@ -219,44 +258,3 @@ export function createApplication(config: Config) {
     const { workspace, revision } = parsed.data;
     const changed = db
       .prepare(
-        "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
-      )
-      .run(JSON.stringify(workspace), "owner", revision);
-    if (!changed.changes)
-      return res.status(409).json({
-        error: "Another tab changed this workspace. Reload before saving.",
-      });
-    res.json({ workspace, revision: revision + 1 });
-  });
-  app.use("/api", (_req, res) =>
-    res.status(404).json({ error: "API route not found" }),
-  );
-  const dist = resolve(config.staticDir || "dist");
-  app.use(
-    express.static(dist, {
-      index: false,
-      maxAge: config.production ? "1h" : 0,
-    }),
-  );
-  app.get("/{*path}", (req, res, next) => {
-    if (req.path.includes(".")) return next();
-    res.set("Cache-Control", "no-store");
-    res.sendFile(resolve(dist, "index.html"));
-  });
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    const e = err as { type?: string; status?: number };
-    if (e.type === "entity.too.large")
-      return res.status(413).json({ error: "Workspace payload is too large" });
-    if (e.type === "entity.parse.failed")
-      return res.status(400).json({ error: "Invalid JSON" });
-    if (e.status === 404)
-      return res
-        .status(404)
-        .json({ error: "Build the frontend with npm run build" });
-    console.error("Application request failed");
-    res
-      .status(500)
-      .json({ error: "Server error. Changes have not been saved." });
-  });
-  return { app, close: () => db.close() };
-}
