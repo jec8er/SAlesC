@@ -297,3 +297,21 @@ test("cycle creation requires configured inference and returns only redacted sta
     rmSync(dir, { recursive: true, force: true });
   }
 });
+test("a hung inference times out, releases its claim, and is retryable", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ecomoda-timeout-"));
+  const store = createFileStore(dir);
+  const infer = async () => new Promise<string>(() => {});
+  const s = await running(":memory:", { ecomodaStore: store, ecomodaInfer: infer, ecomodaTimeoutMs: 20 });
+  try {
+    const a = await login(s.origin);
+    const headers = { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf };
+    const r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers, body: JSON.stringify({ id: "hung", task: "bounded work" }) });
+    assert.equal(r.status, 504);
+    assert.deepEqual(await r.json(), { error: "Ecomoda cycle timed out and can be retried" });
+    const summary = await store.inspect("hung");
+    assert.equal(summary.status, "retryable_failure");
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
