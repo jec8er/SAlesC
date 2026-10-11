@@ -15,6 +15,15 @@ export type Config = {
   publicOrigin?: string;
   staticDir?: string;
   now?: () => number;
+  ecomodaStore?: {
+    inspect: (id: string) => Promise<{
+      exists: boolean;
+      status: string;
+      checkpointCount: number;
+      updatedAt?: string | null;
+      resultStatus?: string | null;
+    }>;
+  };
 };
 export function createApplication(config: Config) {
   if (!validPasswordHash(config.passwordHash))
@@ -155,6 +164,18 @@ export function createApplication(config: Config) {
       .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
       .get("owner") as { payload: string; revision: number };
     res.json({ workspace: JSON.parse(row.payload), revision: row.revision });
+  });
+  app.get("/api/ecomoda/tasks/:id", auth, async (req, res, next) => {
+    if (!config.ecomodaStore)
+      return res.status(503).json({ error: "Ecomoda persistence is not configured" });
+    const id = req.params.id;
+    if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id))
+      return res.status(400).json({ error: "Invalid task ID" });
+    try {
+      const task = await config.ecomodaStore.inspect(id);
+      if (!task.exists) return res.status(404).json({ error: "Task not found" });
+      res.json({ task: { id, ...task } });
+    } catch (error) { next(error); }
   });
   const update = z
     .object({
