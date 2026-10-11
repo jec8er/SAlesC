@@ -20,11 +20,15 @@ export type Config = {
   now?: () => number;
   ecomodaStore?: EcomodaFileStore;
   ecomodaInfer?: EcomodaInference;
+  ecomodaTimeoutMs?: number;
 };
 export function createApplication(config: Config) {
   if (!validPasswordHash(config.passwordHash))
     throw Error("Set OWNER_PASSWORD_HASH using npm run password:hash");
   const now = config.now || Date.now;
+  const ecomodaTimeoutMs = config.ecomodaTimeoutMs ?? 120000;
+  if (!Number.isInteger(ecomodaTimeoutMs) || ecomodaTimeoutMs < 10 || ecomodaTimeoutMs > 300000)
+    throw Error("ECOMODA timeout must be between 10 and 300000 milliseconds");
   if (config.production && !config.publicOrigin)
     throw Error("PUBLIC_ORIGIN is required in production");
   if (config.publicOrigin) {
@@ -184,7 +188,8 @@ export function createApplication(config: Config) {
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid Ecomoda task" });
     try {
-      const result = await runCycle({ ...parsed.data, store: config.ecomodaStore, infer: config.ecomodaInfer });
+      const signal = AbortSignal.timeout(ecomodaTimeoutMs);
+      const result = await runCycle({ ...parsed.data, store: config.ecomodaStore, infer: config.ecomodaInfer, signal });
       if (result.status === "skipped")
         return res.status(409).json({ error: "Task is active or already completed" });
       res.status(201).json({ task: {
@@ -193,7 +198,11 @@ export function createApplication(config: Config) {
         publishAllowed: false,
         verifiedRevenue: null,
       }});
-    } catch (error) { next(error); }
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError")
+        return res.status(504).json({ error: "Ecomoda cycle timed out and can be retried" });
+      next(error);
+    }
   });
   const update = z
     .object({
