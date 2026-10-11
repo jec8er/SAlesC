@@ -21,9 +21,9 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 
 - Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
-- Business/product management and standalone customer catalog exports with real prices and WhatsApp requests to the business number.
+- Business/product management and standalone customer catalog exports with a responsive cart, real prices and one complete WhatsApp request to the business number.
 - Bilingual launch-script templates and local microphone recording/downloads.
-- Opportunity tracking with next actions and follow-up dates.
+- Opportunity tracking with next actions, follow-up dates and downloadable draft proposals tied to the selected business.
 - Manual revenue ledger separating proposals, pending payments and documented collections. Costs, fees and refunds reduce contribution margin. USD/COP totals never mix.
 - Validated JSON backups and a separate illustrative demo that does not write real records.
 
@@ -33,10 +33,11 @@ Customer catalogs contain approved public product facts only, not cost data or p
 
 ```sh
 npm test
+npm run format:check
 npm run build
 ```
 
-Tests exercise real Express HTTP endpoints and SQLite persistence: login, protected records, save/reload, conflicting revisions, invalid JSON and records, CSRF, origin checks, logout, login throttling and restart persistence. Domain tests cover revenue math and safe catalog exports. GitHub Actions repeats tests and production builds.
+Tests exercise real Express HTTP endpoints and SQLite persistence: login, protected records, save/reload, conflicting revisions, invalid JSON and records, CSRF, origin checks, logout, login throttling and restart persistence. Domain tests cover revenue math plus safe catalog and proposal exports. GitHub Actions checks formatting, tests and production builds on Linux and Windows, then packages the independent app as a downloadable artifact.
 
 ## Production server
 
@@ -63,11 +64,3 @@ The offer to test is a defined catalog/content setup service: proposed USD 199 s
 - `legacy/`: unchanged original SaborClick/Express sources, preserved for history.
 
 Existing JSON exports from the earlier workspace can be restored in Settings after signing in. The previous hosted database is not automatically migrated or accessed.
-
-## Download the compiled independent package
-
-Open the latest successful `Validate and package application` run on the `github-runtime` branch in GitHub Actions. Download the `saborclick-studio-independent` artifact and extract it. It contains source and the already compiled frontend; it contains no owner password, sessions or runtime database.
-
-On Windows, install Node.js 24+ and double-click `START-WINDOWS.cmd`. On first launch it installs locked dependencies and asks you to choose your owner password with hidden input. After the server starts, open http://127.0.0.1:3001. Keep the terminal open while using the application. Later launches reuse your dependencies and saved database.
-
-CI validates on both Windows and Linux. The downloadable artifact is retained for 30 days. Main integration remains pending in PR #2; the standalone code and packages are available from the branch independently.
