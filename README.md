@@ -63,3 +63,11 @@ The offer to test is a defined catalog/content setup service: proposed USD 199 s
 - `legacy/`: unchanged original SaborClick/Express sources, preserved for history.
 
 Existing JSON exports from the earlier workspace can be restored in Settings after signing in. The previous hosted database is not automatically migrated or accessed.
+
+## Download the compiled independent package
+
+Open the latest successful `Validate and package application` run on the `github-runtime` branch in GitHub Actions. Download the `saborclick-studio-independent` artifact and extract it. It contains source and the already compiled frontend; it contains no owner password, sessions or runtime database.
+
+On Windows, install Node.js 24+ and double-click `START-WINDOWS.cmd`. On first launch it installs locked dependencies and asks you to choose your owner password with hidden input. After the server starts, open http://127.0.0.1:3001. Keep the terminal open while using the application. Later launches reuse your dependencies and saved database.
+
+CI validates on both Windows and Linux. The downloadable artifact is retained for 30 days. Main integration remains pending in PR #2; the standalone code and packages are available from the branch independently.
