@@ -7,6 +7,9 @@ import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { emptyWorkspace, workspaceSchema } from "../lib/domain.ts";
 import { digest, verifyPassword, validPasswordHash } from "./auth.ts";
+import { runCycle } from "../lib/ecomoda-core.mjs";
+import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
+import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 export type Config = {
   databasePath: string;
   passwordHash: string;
@@ -15,15 +18,8 @@ export type Config = {
   publicOrigin?: string;
   staticDir?: string;
   now?: () => number;
-  ecomodaStore?: {
-    inspect: (id: string) => Promise<{
-      exists: boolean;
-      status: string;
-      checkpointCount: number;
-      updatedAt?: string | null;
-      resultStatus?: string | null;
-    }>;
-  };
+  ecomodaStore?: EcomodaFileStore;
+  ecomodaInfer?: EcomodaInference;
 };
 export function createApplication(config: Config) {
   if (!validPasswordHash(config.passwordHash))
@@ -175,6 +171,28 @@ export function createApplication(config: Config) {
       const task = await config.ecomodaStore.inspect(id);
       if (!task.exists) return res.status(404).json({ error: "Task not found" });
       res.json({ task: { id, ...task } });
+    } catch (error) { next(error); }
+  });
+  const ecomodaTask = z.object({
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
+    task: z.string().trim().min(1).max(24000),
+  }).strict();
+  app.post("/api/ecomoda/tasks", auth, async (req, res, next) => {
+    if (!config.ecomodaStore || !config.ecomodaInfer)
+      return res.status(503).json({ error: "Ecomoda inference is not connected" });
+    const parsed = ecomodaTask.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid Ecomoda task" });
+    try {
+      const result = await runCycle({ ...parsed.data, store: config.ecomodaStore, infer: config.ecomodaInfer });
+      if (result.status === "skipped")
+        return res.status(409).json({ error: "Task is active or already completed" });
+      res.status(201).json({ task: {
+        id: result.id,
+        status: result.status,
+        publishAllowed: false,
+        verifiedRevenue: null,
+      }});
     } catch (error) { next(error); }
   });
   const update = z
