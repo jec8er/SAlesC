@@ -36,3 +36,14 @@ test('different task cannot silently reuse checkpoints',()=>fixture(async dir=>{
  await assert.rejects(createFileStore(dir).claim('job','new'),/different work/);
  assert.equal((await readdir(dir)).some(x=>x.endsWith('.lock')),false);
 }));
+test('inspection exposes lifecycle metadata without task text or model output',()=>fixture(async dir=>{
+ const store=createFileStore(dir);
+ assert.deepEqual(await store.inspect('none'),{exists:false,status:'missing',checkpointCount:0});
+ await store.claim('job','private task text');
+ await store.append('job',{role:'Betty',output:'private model output',checkpointKey:0,at:'2026-10-11T09:00:00.000Z'});
+ assert.deepEqual(await store.inspect('job'),{exists:true,status:'active',checkpointCount:1,updatedAt:'2026-10-11T09:00:00.000Z',resultStatus:null});
+ await store.release('job');
+ const summary=await createFileStore(dir).inspect('job');
+ assert.equal(summary.status,'checkpointed');
+ assert.equal(JSON.stringify(summary).includes('private'),false);
+}));
