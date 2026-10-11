@@ -8,6 +8,7 @@ import { createApplication } from "../server/app.ts";
 import { passwordHash } from "../server/auth.ts";
 import { emptyWorkspace } from "../lib/domain.ts";
 import { createFileStore } from "../lib/ecomoda-file-store.mjs";
+import { createProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
 const testPassword = "fixture-password-not-a-real-credential";
 const hash = passwordHash(testPassword);
 async function running(databasePath = ":memory:", extra = {}) {
@@ -310,6 +311,41 @@ test("a hung inference times out, releases its claim, and is retryable", async (
     assert.deepEqual(await r.json(), { error: "Ecomoda cycle timed out and can be retried" });
     const summary = await store.inspect("hung");
     assert.equal(summary.status, "retryable_failure");
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+test("project memory is authenticated, CSRF protected, validated and revision safe", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ecomoda-memory-api-"));
+  const s = await running(":memory:", { ecomodaMemory: createProjectMemoryStore(dir) });
+  try {
+    assert.equal((await fetch(s.origin + "/api/ecomoda/memory/orbit")).status, 401);
+    const a = await login(s.origin);
+    const readHeaders = { Cookie: a.cookie };
+    let r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { headers: readHeaders });
+    assert.equal(r.status, 200);
+    const initial = await r.json() as { revision: number; memory: { schemaVersion: number } };
+    assert.equal(initial.revision, 0);
+    assert.equal(initial.memory.schemaVersion, 1);
+    const memory = {
+      schemaVersion: 1,
+      preferences: [{ area: "publishing", key: "publishing_paused", value: "Keep publishing paused pending quality approval.", updatedAt: "2026-10-11T15:00:00.000Z" }],
+      verifiedState: [],
+      nextActions: [],
+    };
+    const body = JSON.stringify({ revision: 0, memory });
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json() as { revision: number }).revision, 1);
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body });
+    assert.equal(r.status, 409);
+    const unsafe = { ...memory, biography: "personal profile" };
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf }, body: JSON.stringify({ revision: 1, memory: unsafe }) });
+    assert.equal(r.status, 400);
+    assert.deepEqual(await r.json(), { error: "Project memory was rejected" });
+    r = await fetch(s.origin + "/api/ecomoda/memory/orbit", { method: "PUT", headers: { "Content-Type": "application/json", Cookie: a.cookie }, body: JSON.stringify({ revision: 1, memory }) });
+    assert.equal(r.status, 403);
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });
