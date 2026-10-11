@@ -127,7 +127,7 @@ function fileName(value: string) {
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .toLowerCase();
-  return cleaned || "saborclick";
+  return cleaned || "orbit";
 }
 function demo(): Workspace {
   return {
@@ -207,7 +207,7 @@ function demo(): Workspace {
       monthlyPrice: 39,
       target: 1000,
       currency: "USD",
-      sellerName: "SaborClick Studio",
+      sellerName: "ORBIT",
       sellerPhone: "12125550100",
       sellerEmail: "owner@example.com",
       paymentLink: "",
@@ -512,7 +512,7 @@ export default function Studio({
       await navigator.clipboard.writeText(content);
       setToast("Follow-up copied — review it before sending");
     } catch {
-      download(content, "saborclick-follow-up.txt");
+      download(content, "orbit-follow-up.txt");
       setToast("Clipboard unavailable — downloaded as text");
     }
   }
@@ -751,10 +751,10 @@ export default function Studio({
           }}
         >
           <span className="brandmark">
-            S<span>↗</span>
+            O<span>•</span>
           </span>
           <span>
-            SaborClick<small>STUDIO / PRIVATE WORKSPACE</small>
+            ORBIT<small>PRIVATE BUSINESS OS</small>
           </span>
         </a>
         <div className="nav-label">YOUR BUSINESS, CONNECTED</div>
@@ -998,7 +998,7 @@ export default function Studio({
                 <>
                   <div className="section-title">
                     <div>
-                      <p className="eyebrow">SABORCLICK / DIRECT COMMERCE</p>
+                      <p className="eyebrow">ORBIT / DIRECT COMMERCE</p>
                       <h1>Your storefronts.</h1>
                       <p>
                         Real products. Clear prices. Orders that reach the
@@ -1996,7 +1996,7 @@ export default function Studio({
                         onClick={() =>
                           download(
                             JSON.stringify(w, null, 2),
-                            "saborclick-workspace.json",
+                            "orbit-workspace.json",
                             "application/json",
                           )
                         }
@@ -2038,7 +2038,7 @@ export default function Studio({
                       <h3>Connected foundations</h3>
                       <div className="source-row">
                         <Check size={16} />
-                        SaborClick: commerce and catalog exports
+                        ORBIT Commerce: catalogs and direct-order exports
                       </div>
                       <div className="source-row">
                         <Check size={16} />
@@ -2061,7 +2061,7 @@ export default function Studio({
           )}
         </div>
         <footer className="app-footer">
-          <span>SABORCLICK STUDIO</span>
+          <span>ORBIT</span>
           <span>
             Built for independent business. Measured in real outcomes.
           </span>

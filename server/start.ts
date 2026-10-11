@@ -18,7 +18,7 @@ const { app, close } = createApplication({
   ),
 });
 const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
-  console.log(`SaborClick Studio listening on port ${port}`),
+  console.log(`ORBIT listening on port ${port}`),
 );
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () =>

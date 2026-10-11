@@ -1,4 +1,4 @@
-# SaborClick Studio
+# ORBIT
 
 A standalone commerce, content and revenue workspace for jec8er. Runs directly from this GitHub repository with **React + Vite, Express and SQLite**. No Sites, Cloudflare, Vinext, ChatGPT authentication or third-party database account is required.
 
@@ -63,6 +63,6 @@ The offer to test is a defined catalog/content setup service: proposed USD 199 s
 - `server/`: Express API, sessions, password hashing and SQLite persistence.
 - `lib/domain.ts`: validation, contribution calculations and customer exports.
 - `tests/`: domain and HTTP/database integration tests.
-- `legacy/`: unchanged original SaborClick/Express sources, preserved for history.
+- `legacy/`: unchanged original prototype sources, preserved for history.
 
 Existing JSON exports from the earlier workspace can be restored in Settings after signing in. The previous hosted database is not automatically migrated or accessed.
