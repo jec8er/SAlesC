@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { createApplication } from "../server/app.ts";
 import { passwordHash } from "../server/auth.ts";
 import { emptyWorkspace } from "../lib/domain.ts";
+import { createFileStore } from "../lib/ecomoda-file-store.mjs";
 const testPassword = "fixture-password-not-a-real-credential";
 const hash = passwordHash(testPassword);
 async function running(databasePath = ":memory:", extra = {}) {
@@ -269,4 +270,30 @@ test("authenticated task status is private, bounded and redacted", async () => {
     r = await fetch(s.origin + "/api/ecomoda/tasks/%2e%2e%2fsecret", { headers });
     assert.ok([400, 404].includes(r.status));
   } finally { await s.close(); }
+});
+test("cycle creation requires configured inference and returns only redacted state", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ecomoda-api-"));
+  const store = createFileStore(dir);
+  let s = await running(":memory:", { ecomodaStore: store });
+  try {
+    const a = await login(s.origin);
+    const headers = { "Content-Type": "application/json", Cookie: a.cookie, "X-CSRF-Token": a.csrf };
+    let r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers, body: JSON.stringify({ id: "job", task: "private work" }) });
+    assert.equal(r.status, 503);
+    await s.close();
+    const outputs = ["plan secret", "draft secret", '{"accepted":true,"defects":[]}'];
+    s = await running(":memory:", { ecomodaStore: store, ecomodaInfer: async () => outputs.shift()! });
+    const b = await login(s.origin);
+    const authorized = { "Content-Type": "application/json", Cookie: b.cookie, "X-CSRF-Token": b.csrf };
+    r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers: authorized, body: JSON.stringify({ id: "job", task: "private work" }) });
+    assert.equal(r.status, 201);
+    const text = await r.text();
+    assert.equal(text.includes("secret"), false);
+    assert.deepEqual(JSON.parse(text).task, { id: "job", status: "awaiting_artifact_validation", publishAllowed: false, verifiedRevenue: null });
+    r = await fetch(s.origin + "/api/ecomoda/tasks", { method: "POST", headers: authorized, body: JSON.stringify({ id: "job", task: "private work" }) });
+    assert.equal(r.status, 409);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
