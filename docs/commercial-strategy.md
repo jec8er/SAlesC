@@ -26,6 +26,8 @@ Buyer hypothesis: an independent merchant with real products, a working fulfillm
 5. Deliver the complete files, check one customer request, collect and document the actual payment. Record labor, fees and any refund.
 6. Offer recurring updates only when a recurring need is observed. Measure paid conversion and margin before broadening acquisition.
 
+The Close Desk supports this motion by sorting overdue work, identifying missing contact/next-action data, and preparing three reviewable touches. Readiness is record completeness, not a probability forecast. Juan remains responsible for checking each message, choosing the recipient and sending it.
+
 Suggested owner: Juan for customer contact, approvals and collections; app for record keeping and export. Dates: TBD until a real buyer is selected. The main risks are unvalidated willingness to pay, weak differentiation, excessive delivery labor and unconfigured collection methods. The next evidence required is one owner discovery and a paid scope, not a traffic projection.
 
 ## Unit economics

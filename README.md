@@ -23,7 +23,8 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - Business/product management and standalone customer catalog exports with a responsive cart, real prices and one complete WhatsApp request to the business number.
 - Bilingual launch-script templates and local microphone recording/downloads.
-- Opportunity tracking with next actions, follow-up dates and downloadable draft proposals tied to the selected business.
+- A Close Desk that prioritizes overdue opportunities, exposes missing sales information, prepares reviewable follow-up messages and exports a three-touch sequence.
+- Opportunity tracking with lead source, priority, objections, contact dates and downloadable branded proposals with optional WhatsApp and HTTPS deposit actions.
 - Manual revenue ledger separating proposals, pending payments and documented collections. Costs, fees and refunds reduce contribution margin. USD/COP totals never mix.
 - Validated JSON backups and a separate illustrative demo that does not write real records.
 
@@ -53,7 +54,7 @@ For deployment on a server you control:
 
 ## Revenue approach
 
-The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. No autonomous outreach, AI generation, payment processing or social publishing is connected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
+The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. The Close Desk creates a disciplined path from a real prospect to a reviewed proposal and follow-up; it never sends outreach automatically. A configured deposit URL is only a link to an external processor and never marks a payment as collected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
 
 ## Project structure
 

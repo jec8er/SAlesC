@@ -788,6 +788,82 @@ audio {
   max-width: 260px;
   height: 35px;
 }
+.close-desk {
+  margin: 22px 0 28px;
+  padding: 26px;
+  border-radius: 12px;
+  background: var(--green);
+  color: white;
+}
+.close-desk-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 25px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.close-desk-head h2 {
+  margin: 5px 0;
+  font: 30px var(--serif);
+}
+.close-desk-head p:not(.eyebrow) {
+  margin: 0;
+  color: #c9d4cc;
+  font-size: 11px;
+}
+.action-queue {
+  display: grid;
+  gap: 8px;
+}
+.action-queue article {
+  display: grid;
+  grid-template-columns: 50px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 15px;
+  border-radius: 9px;
+  background: #ffffff0d;
+  border: 1px solid #ffffff18;
+}
+.queue-rank {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--green);
+  font: 20px var(--serif);
+}
+.queue-main strong,
+.queue-main span {
+  display: block;
+}
+.queue-main span {
+  color: #aebdb4;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 3px;
+}
+.queue-main p {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: #e8eee9;
+}
+.queue-actions {
+  display: flex;
+  gap: 7px;
+}
+.queue-actions .btn {
+  background: white;
+  color: var(--green);
+  border-color: transparent;
+}
+.queue-empty {
+  color: #c9d4cc;
+  font-size: 12px;
+}
 .kanban {
   display: grid;
   grid-template-columns: repeat(5, minmax(165px, 1fr));
@@ -1432,6 +1508,18 @@ td small {
   padding: 12px;
 }
 @media (max-width: 760px) {
+  .close-desk {
+    padding: 20px;
+  }
+  .action-queue article {
+    grid-template-columns: 44px 1fr;
+  }
+  .queue-actions {
+    grid-column: 1 / -1;
+  }
+  .queue-actions .btn {
+    flex: 1;
+  }
   .login-shell {
     grid-template-columns: 1fr;
   }

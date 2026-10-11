@@ -6,6 +6,10 @@ import {
   workspaceSchema,
   catalogHTML,
   proposalHTML,
+  dealReadiness,
+  salesQueue,
+  followUpText,
+  outreachPack,
 } from "../lib/domain.ts";
 const receipt = {
   id: "r",
@@ -170,4 +174,87 @@ test("proposal exports a bounded draft without inventing agreement", () => {
   assert.match(html, /\$199\.00/);
   assert.match(html, /not an invoice or binding agreement/);
   assert.ok(!html.includes("undefined"));
+});
+
+test("close desk prioritizes overdue work and reports missing sales data", () => {
+  const workspace = emptyWorkspace();
+  workspace.deals = [
+    {
+      id: "later",
+      name: "Later Cafe",
+      contact: "Owner",
+      stage: "contacted",
+      value: 199,
+      nextAction: "Review sample",
+      due: "2026-10-20",
+      notes: "Asked about updates",
+      priority: "high",
+    },
+    {
+      id: "overdue",
+      name: "Overdue Bakery",
+      contact: "",
+      stage: "prospect",
+      value: 199,
+      nextAction: "",
+      due: "2026-10-10",
+      notes: "",
+      priority: "low",
+    },
+  ];
+  const queue = salesQueue(workspace, new Date("2026-10-11T12:00:00Z"));
+  assert.equal(queue[0].deal.id, "overdue");
+  assert.equal(queue[0].overdue, true);
+  assert.deepEqual(
+    dealReadiness(queue[0].deal, new Date("2026-10-11T12:00:00Z")).missing,
+    ["contact", "next action"],
+  );
+});
+
+test("follow-up assets are explicit, bounded and never claim automatic sending", () => {
+  const workspace = emptyWorkspace();
+  const deal = {
+    id: "d",
+    name: "Neighborhood Cafe",
+    contact: "Maya",
+    stage: "proposal" as const,
+    value: 249,
+    nextAction: "Review scope",
+    due: "2026-10-15",
+    notes: "",
+    objection: "Needs owner approval",
+  };
+  const message = followUpText(deal, workspace.settings);
+  const pack = outreachPack(deal, workspace.settings);
+  assert.match(message, /Maya/);
+  assert.match(message, /\$249\.00/);
+  assert.match(pack, /No message has been sent automatically/);
+  assert.match(pack, /Needs owner approval/);
+});
+
+test("proposal may expose configured seller actions without treating a link as payment", () => {
+  const workspace = emptyWorkspace();
+  workspace.settings.sellerPhone = "12125550100";
+  workspace.settings.paymentLink = "https://pay.example/deposit";
+  workspace.settings.depositPercent = 50;
+  const html = proposalHTML(
+    null,
+    {
+      id: "d",
+      name: "Neighborhood Cafe",
+      contact: "Owner",
+      stage: "proposal",
+      value: 200,
+      nextAction: "Review scope",
+      due: "",
+      notes: "",
+    },
+    workspace.settings,
+  );
+  assert.match(html, /Proposed deposit: \$100\.00/);
+  assert.match(html, /https:\/\/wa\.me\/12125550100/);
+  assert.match(html, /https:\/\/pay\.example\/deposit/);
+  assert.match(html, /does not confirm payment/);
+  workspace.settings.paymentLink = "javascript:alert(1)";
+  assert.equal(workspaceSchema.safeParse(workspace).success, false);
 });
