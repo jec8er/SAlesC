@@ -250,3 +250,23 @@ test("production startup requires HTTPS origin and uses secure session cookies",
     await s.close();
   }
 });
+test("authenticated task status is private, bounded and redacted", async () => {
+  const inspect = async (id: string) => id === "known"
+    ? { exists: true, status: "checkpointed", checkpointCount: 2, updatedAt: "2026-10-11T09:00:00.000Z", resultStatus: null }
+    : { exists: false, status: "missing", checkpointCount: 0 };
+  const s = await running(":memory:", { ecomodaStore: { inspect } });
+  try {
+    assert.equal((await fetch(s.origin + "/api/ecomoda/tasks/known")).status, 401);
+    const a = await login(s.origin);
+    const headers = { Cookie: a.cookie };
+    let r = await fetch(s.origin + "/api/ecomoda/tasks/known", { headers });
+    assert.equal(r.status, 200);
+    const body = await r.json() as { task: Record<string, unknown> };
+    assert.deepEqual(body.task, { id: "known", exists: true, status: "checkpointed", checkpointCount: 2, updatedAt: "2026-10-11T09:00:00.000Z", resultStatus: null });
+    assert.equal(JSON.stringify(body).includes("output"), false);
+    r = await fetch(s.origin + "/api/ecomoda/tasks/missing", { headers });
+    assert.equal(r.status, 404);
+    r = await fetch(s.origin + "/api/ecomoda/tasks/%2e%2e%2fsecret", { headers });
+    assert.ok([400, 404].includes(r.status));
+  } finally { await s.close(); }
+});
