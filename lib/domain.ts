@@ -184,7 +184,7 @@ export const emptyWorkspace = (): Workspace => ({
     monthlyPrice: 39,
     target: 1000,
     currency: "USD",
-    sellerName: "SaborClick Studio",
+    sellerName: "ORBIT",
     sellerPhone: "",
     sellerEmail: "",
     paymentLink: "",
@@ -264,7 +264,7 @@ export function salesQueue(workspace: Workspace, today = new Date()) {
 }
 
 export function followUpText(deal: Deal, settings: Workspace["settings"]) {
-  const seller = settings.sellerName || "SaborClick Studio";
+  const seller = settings.sellerName || "ORBIT";
   const offer = settings.offerName || "Direct Commerce Launch";
   const promise =
     settings.offerPromise ||
@@ -279,7 +279,7 @@ export function followUpText(deal: Deal, settings: Workspace["settings"]) {
 
 export function outreachPack(deal: Deal, settings: Workspace["settings"]) {
   const first = followUpText(deal, settings);
-  const seller = settings.sellerName || "SaborClick Studio";
+  const seller = settings.sellerName || "ORBIT";
   return `SALES FOLLOW-UP PACK — ${deal.name}\n\n1. CURRENT MESSAGE\n${first}\n\n2. VALUE FOLLOW-UP (2 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — following up from ${seller}. The goal is not to add more software; it is to make the offer, ordering path and handoff clearer. Is this still worth reviewing?\n\n3. CLOSE THE LOOP (5 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — I’m closing the loop on this for now. If improving the direct-order experience becomes a priority, reply here and I’ll reopen the scope.\n\nInternal next action: ${deal.nextAction || "Choose a specific next action before sending."}\n${deal.objection ? `Known objection: ${deal.objection}\n` : ""}No message has been sent automatically.`;
 }
 
@@ -472,7 +472,7 @@ export function proposalHTML(
     deal.value || settings.setupPrice,
     settings.currency,
   );
-  const seller = settings.sellerName || b?.name || "SaborClick Studio";
+  const seller = settings.sellerName || b?.name || "ORBIT";
   const offer = settings.offerName || "Direct Commerce Launch";
   const promise =
     settings.offerPromise ||
@@ -503,5 +503,5 @@ export function proposalHTML(
     .filter(Boolean)
     .join("");
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposal · ${safe(deal.name)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f2ea;color:#173b35;font:15px/1.65 system-ui}main{max-width:900px;margin:40px auto;background:white;padding:clamp(30px,7vw,80px);box-shadow:0 20px 70px #173b3514}.label{font-size:10px;letter-spacing:.18em;font-weight:700;color:#7d8e6c}h1{font:clamp(42px,7vw,72px)/1 Georgia;margin:30px 0}h2{font:28px Georgia;margin-top:48px}.intro{font-size:19px;color:#63736b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:40px 0}.box{background:#edf1e4;padding:24px;border-radius:12px}.price{font:42px Georgia;margin:0}.scope li{margin:12px 0}.actions{display:flex;flex-wrap:wrap;gap:12px;margin:38px 0}.cta{display:inline-block;background:#173b35;color:white;text-decoration:none;padding:14px 18px;border-radius:9px;font-weight:700}.cta.secondary{background:#d8e89e;color:#173b35}.terms{border-top:1px solid #dce2d9;margin-top:50px;padding-top:25px;color:#6e7a74;font-size:12px}@media(max-width:620px){.grid{grid-template-columns:1fr}}@media print{body{background:white}main{margin:0;box-shadow:none}.actions{display:none}}</style></head><body><main><div class="label">DRAFT SERVICE PROPOSAL · ${today}</div><h1>${safe(offer)}</h1><p class="intro">Prepared for <strong>${safe(deal.name)}</strong>${deal.contact ? ` · ${safe(deal.contact)}` : ""} by ${safe(seller)}.</p><p class="intro">${safe(promise)}</p><div class="grid"><div class="box"><div class="label">PROPOSED INVESTMENT</div><p class="price">${price}</p><p>Proposed deposit: ${deposit} (${percent}%). Subject to written approval.</p></div><div class="box"><div class="label">NEXT STEP</div><p>${safe(deal.nextAction || "Confirm scope, timeline and payment terms")}</p>${deal.due ? `<p>Target follow-up: ${safe(deal.due)}</p>` : ""}</div></div>${contact ? `<div class="actions">${contact}</div>` : ""}<h2>Proposed scope</h2><ul class="scope"><li>One direct-order catalog using approved business and product information.</li><li>Up to ten products with current prices and availability.</li><li>A WhatsApp request flow tested with the business owner.</li><li>Three editable launch scripts and one recorded voiceover file.</li><li>One handoff session and one revision round.</li></ul><h2>Success criteria</h2><p>The catalog opens correctly on mobile and desktop, sends a complete order request to the approved business number, and can be updated from the delivered workspace.</p><div class="terms">Draft generated from SaborClick Studio. This document is not an invoice or binding agreement. Opening a payment link does not confirm payment. Final scope, delivery date, taxes, payment method, ownership and revision limits must be confirmed in writing before work begins.</div></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposal · ${safe(deal.name)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f2ea;color:#173b35;font:15px/1.65 system-ui}main{max-width:900px;margin:40px auto;background:white;padding:clamp(30px,7vw,80px);box-shadow:0 20px 70px #173b3514}.label{font-size:10px;letter-spacing:.18em;font-weight:700;color:#7d8e6c}h1{font:clamp(42px,7vw,72px)/1 Georgia;margin:30px 0}h2{font:28px Georgia;margin-top:48px}.intro{font-size:19px;color:#63736b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:40px 0}.box{background:#edf1e4;padding:24px;border-radius:12px}.price{font:42px Georgia;margin:0}.scope li{margin:12px 0}.actions{display:flex;flex-wrap:wrap;gap:12px;margin:38px 0}.cta{display:inline-block;background:#173b35;color:white;text-decoration:none;padding:14px 18px;border-radius:9px;font-weight:700}.cta.secondary{background:#d8e89e;color:#173b35}.terms{border-top:1px solid #dce2d9;margin-top:50px;padding-top:25px;color:#6e7a74;font-size:12px}@media(max-width:620px){.grid{grid-template-columns:1fr}}@media print{body{background:white}main{margin:0;box-shadow:none}.actions{display:none}}</style></head><body><main><div class="label">DRAFT SERVICE PROPOSAL · ${today}</div><h1>${safe(offer)}</h1><p class="intro">Prepared for <strong>${safe(deal.name)}</strong>${deal.contact ? ` · ${safe(deal.contact)}` : ""} by ${safe(seller)}.</p><p class="intro">${safe(promise)}</p><div class="grid"><div class="box"><div class="label">PROPOSED INVESTMENT</div><p class="price">${price}</p><p>Proposed deposit: ${deposit} (${percent}%). Subject to written approval.</p></div><div class="box"><div class="label">NEXT STEP</div><p>${safe(deal.nextAction || "Confirm scope, timeline and payment terms")}</p>${deal.due ? `<p>Target follow-up: ${safe(deal.due)}</p>` : ""}</div></div>${contact ? `<div class="actions">${contact}</div>` : ""}<h2>Proposed scope</h2><ul class="scope"><li>One direct-order catalog using approved business and product information.</li><li>Up to ten products with current prices and availability.</li><li>A WhatsApp request flow tested with the business owner.</li><li>Three editable launch scripts and one recorded voiceover file.</li><li>One handoff session and one revision round.</li></ul><h2>Success criteria</h2><p>The catalog opens correctly on mobile and desktop, sends a complete order request to the approved business number, and can be updated from the delivered workspace.</p><div class="terms">Draft generated from ORBIT. This document is not an invoice or binding agreement. Opening a payment link does not confirm payment. Final scope, delivery date, taxes, payment method, ownership and revision limits must be confirmed in writing before work begins.</div></main></body></html>`;
 }

@@ -155,7 +155,7 @@ test("proposal exports a bounded draft without inventing agreement", () => {
   const html = proposalHTML(
     {
       id: "b",
-      name: "SaborClick",
+      name: "ORBIT",
       category: "Services",
       phone: "12125550100",
       currency: "USD",

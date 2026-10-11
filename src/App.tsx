@@ -76,7 +76,7 @@ export default function App() {
   return (
     <div className="login-shell">
       <section className="login-art">
-        <p className="eyebrow light">SABORCLICK STUDIO / JEC8ER</p>
+        <p className="eyebrow light">ORBIT / JEC8ER</p>
         <h1>
           Good craft.
           <br />
@@ -87,14 +87,14 @@ export default function App() {
           <br />
           One independent workspace.
         </p>
-        <span className="login-monogram">S↗</span>
+        <span className="login-monogram">O•</span>
         <small>Built from your GitHub project.</small>
       </section>
       <section className="login-form">
         <div>
           <ShieldCheck size={30} />
           <p className="eyebrow">PRIVATE OWNER ACCESS</p>
-          <h2>Welcome to your studio.</h2>
+          <h2>Welcome to ORBIT.</h2>
           <p>Sign in with the owner password configured on your server.</p>
           {!ready ? (
             <p>Checking your session…</p>
