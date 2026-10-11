@@ -11,6 +11,7 @@ import { runCycle } from "../lib/ecomoda-core.mjs";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
+import { buildProjectContext } from "../lib/ecomoda-project-context.mjs";
 export type Config = {
   databasePath: string;
   passwordHash: string;
@@ -29,11 +30,7 @@ export function createApplication(config: Config) {
     throw Error("Set OWNER_PASSWORD_HASH using npm run password:hash");
   const now = config.now || Date.now;
   const ecomodaTimeoutMs = config.ecomodaTimeoutMs ?? 120000;
-  if (
-    !Number.isInteger(ecomodaTimeoutMs) ||
-    ecomodaTimeoutMs < 10 ||
-    ecomodaTimeoutMs > 300000
-  )
+  if (!Number.isInteger(ecomodaTimeoutMs) || ecomodaTimeoutMs < 10 || ecomodaTimeoutMs > 300000)
     throw Error("ECOMODA timeout must be between 10 and 300000 milliseconds");
   if (config.production && !config.publicOrigin)
     throw Error("PUBLIC_ORIGIN is required in production");
@@ -174,30 +171,22 @@ export function createApplication(config: Config) {
   const projectId = /^[a-z0-9][a-z0-9_-]{0,79}$/;
   app.get("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
     if (!config.ecomodaMemory)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda project memory is not configured" });
+      return res.status(503).json({ error: "Ecomoda project memory is not configured" });
     const id = req.params.projectId;
     if (typeof id !== "string" || !projectId.test(id))
       return res.status(400).json({ error: "Invalid project ID" });
     try {
       const record = await config.ecomodaMemory.read(id);
       res.json({ projectId: id, ...record });
-    } catch (error) {
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
-  const memoryUpdate = z
-    .object({
-      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-      memory: z.unknown(),
-    })
-    .strict();
+  const memoryUpdate = z.object({
+    revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    memory: z.unknown(),
+  }).strict();
   app.put("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
     if (!config.ecomodaMemory)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda project memory is not configured" });
+      return res.status(503).json({ error: "Ecomoda project memory is not configured" });
     const id = req.params.projectId;
     if (typeof id !== "string" || !projectId.test(id))
       return res.status(400).json({ error: "Invalid project ID" });
@@ -205,86 +194,57 @@ export function createApplication(config: Config) {
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid project memory update" });
     try {
-      const record = await config.ecomodaMemory.update(
-        id,
-        parsed.data.memory as never,
-        parsed.data.revision,
-      );
+      const record = await config.ecomodaMemory.update(id, parsed.data.memory as never, parsed.data.revision);
       res.json({ projectId: id, ...record });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (/revision conflict|update is busy/.test(message))
-        return res
-          .status(409)
-          .json({ error: "Project memory changed. Reload before saving." });
-      if (
-        /memory|preferences|verifiedState|nextActions|credential|secret/.test(
-          message,
-        )
-      )
+        return res.status(409).json({ error: "Project memory changed. Reload before saving." });
+      if (/memory|preferences|verifiedState|nextActions|credential|secret/.test(message))
         return res.status(400).json({ error: "Project memory was rejected" });
       next(error);
     }
   });
   app.get("/api/ecomoda/tasks/:id", auth, async (req, res, next) => {
     if (!config.ecomodaStore)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda persistence is not configured" });
+      return res.status(503).json({ error: "Ecomoda persistence is not configured" });
     const id = req.params.id;
-    if (
-      typeof id !== "string" ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id)
-    )
+    if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id))
       return res.status(400).json({ error: "Invalid task ID" });
     try {
       const task = await config.ecomodaStore.inspect(id);
-      if (!task.exists)
-        return res.status(404).json({ error: "Task not found" });
+      if (!task.exists) return res.status(404).json({ error: "Task not found" });
       res.json({ task: { id, ...task } });
-    } catch (error) {
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
-  const ecomodaTask = z
-    .object({
-      id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
-      task: z.string().trim().min(1).max(24000),
-    })
-    .strict();
+  const ecomodaTask = z.object({
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
+    projectId: z.string().regex(projectId),
+    task: z.string().trim().min(1).max(24000),
+  }).strict();
   app.post("/api/ecomoda/tasks", auth, async (req, res, next) => {
-    if (!config.ecomodaStore || !config.ecomodaInfer)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda inference is not connected" });
+    if (!config.ecomodaStore || !config.ecomodaInfer || !config.ecomodaMemory)
+      return res.status(503).json({ error: "Ecomoda inference is not connected" });
     const parsed = ecomodaTask.safeParse(req.body);
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid Ecomoda task" });
     try {
       const signal = AbortSignal.timeout(ecomodaTimeoutMs);
-      const result = await runCycle({
-        ...parsed.data,
-        store: config.ecomodaStore,
-        infer: config.ecomodaInfer,
-        signal,
-      });
+      const record = await config.ecomodaMemory.read(parsed.data.projectId);
+      const projectContext = buildProjectContext(record.memory);
+      const task = JSON.stringify({ request: parsed.data.task, projectContext });
+      const result = await runCycle({ id: parsed.data.id, task, store: config.ecomodaStore, infer: config.ecomodaInfer, signal });
       if (result.status === "skipped")
-        return res
-          .status(409)
-          .json({ error: "Task is active or already completed" });
-      res.status(201).json({
-        task: {
-          id: result.id,
-          status: result.status,
-          publishAllowed: false,
-          verifiedRevenue: null,
-        },
-      });
+        return res.status(409).json({ error: "Task is active or already completed" });
+      res.status(201).json({ task: {
+        id: result.id,
+        status: result.status,
+        publishAllowed: false,
+        verifiedRevenue: null,
+      }});
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError")
-        return res
-          .status(504)
-          .json({ error: "Ecomoda cycle timed out and can be retried" });
+        return res.status(504).json({ error: "Ecomoda cycle timed out and can be retried" });
       next(error);
     }
   });
