@@ -22,6 +22,8 @@ import {
   Cloud,
   AlertCircle,
   LogOut,
+  Copy,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -36,6 +38,9 @@ import {
   workspaceSchema,
   catalogHTML,
   proposalHTML,
+  salesQueue,
+  followUpText,
+  outreachPack,
   scriptFor,
 } from "../lib/domain";
 type EntityKind = "business" | "product" | "deal" | "receipt";
@@ -176,6 +181,14 @@ function demo(): Workspace {
       monthlyPrice: 39,
       target: 1000,
       currency: "USD",
+      sellerName: "SaborClick Studio",
+      sellerPhone: "12125550100",
+      sellerEmail: "owner@example.com",
+      paymentLink: "",
+      offerName: "Direct Commerce Launch",
+      offerPromise:
+        "A clear direct-order catalog, launch content and an owner handoff.",
+      depositPercent: 50,
     },
   };
 }
@@ -318,7 +331,17 @@ export default function Studio({
     m = metrics(w),
     fmt = (n: number, c = currency) => moneyLabel(n, c),
     business = w.businesses.find((b) => b.id === selected) || w.businesses[0],
-    products = w.products.filter((p) => p.businessId === business?.id);
+    products = w.products.filter((p) => p.businessId === business?.id),
+    queue = salesQueue(w);
+  async function copyText(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setToast("Follow-up copied — review it before sending");
+    } catch {
+      download(content, "saborclick-follow-up.txt");
+      setToast("Clipboard unavailable — downloaded as text");
+    }
+  }
   function edit(kind: EntityKind, item?: Entity) {
     setError("");
     setModal({ kind, item });
@@ -391,6 +414,10 @@ export default function Studio({
         nextAction: s("nextAction"),
         due: s("due"),
         notes: s("notes"),
+        source: s("source") as Deal["source"],
+        priority: s("priority") as Deal["priority"],
+        lastContact: s("lastContact"),
+        objection: s("objection"),
       };
       upsert(next.deals, item);
     } else {
@@ -506,7 +533,7 @@ export default function Studio({
       ) : type === "textarea" ? (
         <textarea
           name={name}
-          maxLength={name === "notes" ? 1000 : 600}
+          maxLength={name === "notes" ? 1000 : name === "objection" ? 400 : 600}
           defaultValue={String(modalValue(name) || "")}
         />
       ) : (
@@ -1124,6 +1151,71 @@ export default function Studio({
                     Opportunity values use {currency}. A won opportunity is not
                     collected revenue; record the payment separately.
                   </div>
+                  <section className="close-desk">
+                    <div className="close-desk-head">
+                      <div>
+                        <p className="eyebrow">CLOSE DESK / TODAY</p>
+                        <h2>Do the next revenue action.</h2>
+                        <p>
+                          Ordered by overdue follow-up, due date and priority.
+                          Readiness measures record completeness—not win
+                          probability.
+                        </p>
+                      </div>
+                      <Target size={34} />
+                    </div>
+                    {!queue.length ? (
+                      <p className="queue-empty">
+                        Add a real opportunity to build today’s action queue.
+                      </p>
+                    ) : (
+                      <div className="action-queue">
+                        {queue
+                          .slice(0, 5)
+                          .map(({ deal, score, overdue, missing }) => (
+                            <article key={deal.id}>
+                              <div className="queue-rank">{score}</div>
+                              <div className="queue-main">
+                                <strong>{deal.name}</strong>
+                                <span>
+                                  {overdue
+                                    ? `Overdue · ${deal.due}`
+                                    : deal.due
+                                      ? `Due ${deal.due}`
+                                      : "No follow-up date"}
+                                  {` · ${deal.priority || "medium"} priority`}
+                                </span>
+                                <p>
+                                  {deal.nextAction ||
+                                    `Add ${missing.join(" and ") || "a next action"}`}
+                                </p>
+                              </div>
+                              <div className="queue-actions">
+                                <button
+                                  className="btn small"
+                                  onClick={() =>
+                                    copyText(followUpText(deal, w.settings))
+                                  }
+                                >
+                                  <Copy size={14} /> Copy message
+                                </button>
+                                <button
+                                  className="btn small"
+                                  onClick={() =>
+                                    download(
+                                      outreachPack(deal, w.settings),
+                                      `${fileName(deal.name)}-follow-up-pack.txt`,
+                                    )
+                                  }
+                                >
+                                  <Download size={14} /> 3-touch pack
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                      </div>
+                    )}
+                  </section>
                   <div className="kanban">
                     {stages.map((stage) => (
                       <section key={stage}>
@@ -1176,11 +1268,13 @@ export default function Studio({
                               <div className="deal-actions">
                                 <button
                                   className="text-btn"
-                                  disabled={!business}
                                   onClick={() =>
-                                    business &&
                                     download(
-                                      proposalHTML(business, d, w.settings),
+                                      proposalHTML(
+                                        business || null,
+                                        d,
+                                        w.settings,
+                                      ),
                                       `${fileName(d.name)}-proposal.html`,
                                       "text/html",
                                     )
@@ -1405,10 +1499,20 @@ export default function Studio({
                           await persist({
                             ...w,
                             settings: {
+                              ...w.settings,
                               setupPrice: Number(f.get("setupPrice")),
                               monthlyPrice: Number(f.get("monthlyPrice")),
                               target: Number(f.get("target")),
                               currency: c,
+                              sellerName: String(f.get("sellerName") || ""),
+                              sellerPhone: String(
+                                f.get("sellerPhone") || "",
+                              ).replace(/[+\s()-]/g, ""),
+                              sellerEmail: String(f.get("sellerEmail") || ""),
+                              paymentLink: String(f.get("paymentLink") || ""),
+                              offerName: String(f.get("offerName") || ""),
+                              offerPromise: String(f.get("offerPromise") || ""),
+                              depositPercent: Number(f.get("depositPercent")),
                             },
                           });
                         }}
@@ -1441,6 +1545,71 @@ export default function Studio({
                             />
                           </label>
                         ))}
+                        <label>
+                          Seller / studio name
+                          <input
+                            name="sellerName"
+                            maxLength={180}
+                            defaultValue={w.settings.sellerName || ""}
+                          />
+                        </label>
+                        <label>
+                          WhatsApp number
+                          <input
+                            name="sellerPhone"
+                            maxLength={30}
+                            placeholder="Country code + number"
+                            defaultValue={w.settings.sellerPhone || ""}
+                          />
+                        </label>
+                        <label>
+                          Seller email
+                          <input
+                            name="sellerEmail"
+                            type="email"
+                            maxLength={254}
+                            defaultValue={w.settings.sellerEmail || ""}
+                          />
+                        </label>
+                        <label>
+                          Secure deposit link (optional)
+                          <input
+                            name="paymentLink"
+                            type="url"
+                            placeholder="https://"
+                            maxLength={2000}
+                            defaultValue={w.settings.paymentLink || ""}
+                          />
+                        </label>
+                        <label>
+                          Offer name
+                          <input
+                            name="offerName"
+                            maxLength={180}
+                            defaultValue={
+                              w.settings.offerName || "Direct Commerce Launch"
+                            }
+                          />
+                        </label>
+                        <label>
+                          Proposed deposit (%)
+                          <input
+                            name="depositPercent"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            defaultValue={w.settings.depositPercent ?? 50}
+                          />
+                        </label>
+                        <label>
+                          Offer outcome
+                          <textarea
+                            name="offerPromise"
+                            maxLength={400}
+                            defaultValue={w.settings.offerPromise || ""}
+                          />
+                        </label>
                         <button disabled={busy} className="btn primary">
                           Save assumptions
                         </button>
@@ -1636,6 +1805,23 @@ export default function Studio({
                     <Field name="contact" label="Contact (optional)" />
                     <Field name="stage" label="Stage" options={[...stages]} />
                     <Field
+                      name="source"
+                      label="Lead source"
+                      options={[
+                        "referral",
+                        "walk-in",
+                        "social",
+                        "marketplace",
+                        "outbound",
+                        "other",
+                      ]}
+                    />
+                    <Field
+                      name="priority"
+                      label="Priority"
+                      options={["medium", "high", "low"]}
+                    />
+                    <Field
                       name="value"
                       label={`Proposed value (${currency})`}
                       type="number"
@@ -1644,6 +1830,16 @@ export default function Studio({
                     />
                     <Field name="nextAction" label="Next action" />
                     <Field name="due" label="Follow-up date" type="date" />
+                    <Field
+                      name="lastContact"
+                      label="Last contact date"
+                      type="date"
+                    />
+                    <Field
+                      name="objection"
+                      label="Known objection"
+                      type="textarea"
+                    />
                     <Field name="notes" label="Notes" type="textarea" />
                   </>
                 )}

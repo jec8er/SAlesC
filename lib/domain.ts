@@ -38,6 +38,22 @@ export const dealSchema = z
     nextAction: z.string().max(400),
     due: z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/),
     notes: z.string().max(1000),
+    source: z
+      .enum([
+        "referral",
+        "walk-in",
+        "social",
+        "marketplace",
+        "outbound",
+        "other",
+      ])
+      .optional(),
+    priority: z.enum(["low", "medium", "high"]).optional(),
+    lastContact: z
+      .string()
+      .regex(/^$|^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    objection: z.string().max(400).optional(),
   })
   .strict();
 export const receiptSchema = z
@@ -93,6 +109,32 @@ export const workspaceSchema = z
         monthlyPrice: money,
         target: money,
         currency: z.enum(["USD", "COP"]),
+        sellerName: z.string().trim().max(180).optional(),
+        sellerPhone: z
+          .string()
+          .regex(/^$|^\d{8,15}$/, "Use 8–15 digits, including country code")
+          .optional(),
+        sellerEmail: z
+          .string()
+          .trim()
+          .max(254)
+          .refine(
+            (value) => !value || z.string().email().safeParse(value).success,
+            "Use a valid email address",
+          )
+          .optional(),
+        paymentLink: z
+          .string()
+          .trim()
+          .max(2000)
+          .refine(
+            (value) => !value || /^https:\/\//.test(value),
+            "Use an HTTPS payment link",
+          )
+          .optional(),
+        offerName: z.string().trim().max(180).optional(),
+        offerPromise: z.string().trim().max(400).optional(),
+        depositPercent: z.number().int().min(0).max(100).optional(),
       })
       .strict(),
   })
@@ -135,6 +177,14 @@ export const emptyWorkspace = (): Workspace => ({
     monthlyPrice: 39,
     target: 1000,
     currency: "USD",
+    sellerName: "SaborClick Studio",
+    sellerPhone: "",
+    sellerEmail: "",
+    paymentLink: "",
+    offerName: "Direct Commerce Launch",
+    offerPromise:
+      "A clear direct-order catalog, launch content and an owner handoff.",
+    depositPercent: 50,
   },
 });
 export function metrics(w: Workspace, currency = w.settings.currency) {
@@ -161,6 +211,69 @@ export function moneyLabel(n: number, currency = "USD") {
     currency,
     maximumFractionDigits: currency === "COP" ? 0 : 2,
   }).format(n);
+}
+
+export function dealReadiness(deal: Deal, today = new Date()) {
+  if (deal.stage === "won")
+    return { score: 100, overdue: false, missing: [] as string[] };
+  if (deal.stage === "lost")
+    return { score: 0, overdue: false, missing: [] as string[] };
+  const missing: string[] = [];
+  let score = { prospect: 10, contacted: 25, proposal: 45 }[deal.stage];
+  if (deal.contact.trim()) score += 15;
+  else missing.push("contact");
+  if (deal.nextAction.trim()) score += 20;
+  else missing.push("next action");
+  if (deal.due) score += 10;
+  else missing.push("follow-up date");
+  if (deal.notes.trim()) score += 5;
+  if (deal.lastContact) score += 5;
+  if (deal.objection?.trim()) score += 5;
+  const day = today.toISOString().slice(0, 10);
+  return {
+    score: Math.min(100, score),
+    overdue: Boolean(deal.due && deal.due < day),
+    missing,
+  };
+}
+
+export function salesQueue(workspace: Workspace, today = new Date()) {
+  const day = today.toISOString().slice(0, 10);
+  const priority = { high: 0, medium: 1, low: 2 } as const;
+  return workspace.deals
+    .filter((deal) => !["won", "lost"].includes(deal.stage))
+    .map((deal) => ({ deal, ...dealReadiness(deal, today) }))
+    .sort((a, b) => {
+      const dueA = a.deal.due || "9999-12-31";
+      const dueB = b.deal.due || "9999-12-31";
+      return (
+        Number(dueA >= day) - Number(dueB >= day) ||
+        dueA.localeCompare(dueB) ||
+        priority[a.deal.priority || "medium"] -
+          priority[b.deal.priority || "medium"] ||
+        b.score - a.score
+      );
+    });
+}
+
+export function followUpText(deal: Deal, settings: Workspace["settings"]) {
+  const seller = settings.sellerName || "SaborClick Studio";
+  const offer = settings.offerName || "Direct Commerce Launch";
+  const promise =
+    settings.offerPromise ||
+    "a clear direct-order catalog, launch content and an owner handoff";
+  const greeting = deal.contact.trim() || deal.name;
+  if (deal.stage === "proposal")
+    return `Hi ${greeting} — this is ${seller}. I wanted to follow up on the ${offer} proposal. The proposed scope is ${promise.toLowerCase()} for ${moneyLabel(deal.value || settings.setupPrice, settings.currency)}. Would you like to review the scope together or decide on the next step?`;
+  if (deal.stage === "contacted")
+    return `Hi ${greeting} — thank you for the conversation. Based on what we discussed, ${offer} is designed to deliver ${promise.toLowerCase()}. The next useful step is ${deal.nextAction || "a short scope review"}. What time works for you?`;
+  return `Hi ${greeting} — I’m ${seller}. I help independent businesses with ${promise.toLowerCase()} through ${offer}. I’d like to understand how customers order from ${deal.name} today and whether a simpler direct-order flow would be useful. Would you be open to a short conversation?`;
+}
+
+export function outreachPack(deal: Deal, settings: Workspace["settings"]) {
+  const first = followUpText(deal, settings);
+  const seller = settings.sellerName || "SaborClick Studio";
+  return `SALES FOLLOW-UP PACK — ${deal.name}\n\n1. CURRENT MESSAGE\n${first}\n\n2. VALUE FOLLOW-UP (2 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — following up from ${seller}. The goal is not to add more software; it is to make the offer, ordering path and handoff clearer. Is this still worth reviewing?\n\n3. CLOSE THE LOOP (5 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — I’m closing the loop on this for now. If improving the direct-order experience becomes a priority, reply here and I’ll reopen the scope.\n\nInternal next action: ${deal.nextAction || "Choose a specific next action before sending."}\n${deal.objection ? `Known objection: ${deal.objection}\n` : ""}No message has been sent automatically.`;
 }
 export function escapeHTML(s: string) {
   return s.replace(
@@ -283,7 +396,7 @@ export function catalogHTML(b: Business, products: Product[]) {
 }
 
 export function proposalHTML(
-  b: Business,
+  b: Business | null,
   deal: Deal,
   settings: Workspace["settings"],
 ) {
@@ -293,6 +406,36 @@ export function proposalHTML(
     deal.value || settings.setupPrice,
     settings.currency,
   );
+  const seller = settings.sellerName || b?.name || "SaborClick Studio";
+  const offer = settings.offerName || "Direct Commerce Launch";
+  const promise =
+    settings.offerPromise ||
+    "A clear direct-order catalog, launch content and an owner handoff.";
+  const percent = settings.depositPercent ?? 50;
+  const deposit = moneyLabel(
+    ((deal.value || settings.setupPrice) * percent) / 100,
+    settings.currency,
+  );
+  const phone = settings.sellerPhone || "";
+  const paymentLink = /^https:\/\//.test(settings.paymentLink || "")
+    ? settings.paymentLink || ""
+    : "";
+  const message = encodeURIComponent(
+    `Hello ${seller}, I would like to discuss the ${offer} proposal for ${deal.name}.`,
+  );
+  const contact = [
+    phone
+      ? `<a class="cta" href="https://wa.me/${safe(phone)}?text=${message}">Discuss on WhatsApp</a>`
+      : "",
+    paymentLink
+      ? `<a class="cta secondary" href="${safe(paymentLink)}" target="_blank" rel="noopener noreferrer">Open secure deposit link</a>`
+      : "",
+    settings.sellerEmail
+      ? `<a class="cta secondary" href="mailto:${safe(settings.sellerEmail)}?subject=${encodeURIComponent(`${offer} proposal`)}">Reply by email</a>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposal · ${safe(deal.name)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f2ea;color:#173b35;font:15px/1.65 system-ui}main{max-width:900px;margin:40px auto;background:white;padding:clamp(30px,7vw,80px);box-shadow:0 20px 70px #173b3514}.label{font-size:10px;letter-spacing:.18em;font-weight:700;color:#7d8e6c}h1{font:clamp(42px,7vw,72px)/1 Georgia;margin:30px 0}h2{font:28px Georgia;margin-top:48px}.intro{font-size:19px;color:#63736b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:40px 0}.box{background:#edf1e4;padding:24px;border-radius:12px}.price{font:42px Georgia;margin:0}.scope li{margin:12px 0}.terms{border-top:1px solid #dce2d9;margin-top:50px;padding-top:25px;color:#6e7a74;font-size:12px}@media print{body{background:white}main{margin:0;box-shadow:none}}</style></head><body><main><div class="label">DRAFT SERVICE PROPOSAL · ${today}</div><h1>Direct Commerce<br>Launch</h1><p class="intro">Prepared for <strong>${safe(deal.name)}</strong>${deal.contact ? ` · ${safe(deal.contact)}` : ""} by ${safe(b.name)}.</p><div class="grid"><div class="box"><div class="label">PROPOSED INVESTMENT</div><p class="price">${price}</p><p>One-time setup, subject to written approval.</p></div><div class="box"><div class="label">NEXT STEP</div><p>${safe(deal.nextAction || "Confirm scope, timeline and payment terms")}</p>${deal.due ? `<p>Target follow-up: ${safe(deal.due)}</p>` : ""}</div></div><h2>Proposed scope</h2><ul class="scope"><li>One direct-order catalog using approved business and product information.</li><li>Up to ten products with current prices and availability.</li><li>A WhatsApp request flow tested with the business owner.</li><li>Three editable launch scripts and one recorded voiceover file.</li><li>One handoff session and one revision round.</li></ul><h2>Success criteria</h2><p>The catalog opens correctly on mobile and desktop, sends a complete order request to the approved business number, and can be updated from the delivered workspace.</p><div class="terms">Draft generated from SaborClick Studio. This document is not an invoice or binding agreement. Final scope, delivery date, taxes, payment method, ownership and revision limits must be confirmed in writing before work begins.</div></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposal · ${safe(deal.name)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f2ea;color:#173b35;font:15px/1.65 system-ui}main{max-width:900px;margin:40px auto;background:white;padding:clamp(30px,7vw,80px);box-shadow:0 20px 70px #173b3514}.label{font-size:10px;letter-spacing:.18em;font-weight:700;color:#7d8e6c}h1{font:clamp(42px,7vw,72px)/1 Georgia;margin:30px 0}h2{font:28px Georgia;margin-top:48px}.intro{font-size:19px;color:#63736b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:40px 0}.box{background:#edf1e4;padding:24px;border-radius:12px}.price{font:42px Georgia;margin:0}.scope li{margin:12px 0}.actions{display:flex;flex-wrap:wrap;gap:12px;margin:38px 0}.cta{display:inline-block;background:#173b35;color:white;text-decoration:none;padding:14px 18px;border-radius:9px;font-weight:700}.cta.secondary{background:#d8e89e;color:#173b35}.terms{border-top:1px solid #dce2d9;margin-top:50px;padding-top:25px;color:#6e7a74;font-size:12px}@media(max-width:620px){.grid{grid-template-columns:1fr}}@media print{body{background:white}main{margin:0;box-shadow:none}.actions{display:none}}</style></head><body><main><div class="label">DRAFT SERVICE PROPOSAL · ${today}</div><h1>${safe(offer)}</h1><p class="intro">Prepared for <strong>${safe(deal.name)}</strong>${deal.contact ? ` · ${safe(deal.contact)}` : ""} by ${safe(seller)}.</p><p class="intro">${safe(promise)}</p><div class="grid"><div class="box"><div class="label">PROPOSED INVESTMENT</div><p class="price">${price}</p><p>Proposed deposit: ${deposit} (${percent}%). Subject to written approval.</p></div><div class="box"><div class="label">NEXT STEP</div><p>${safe(deal.nextAction || "Confirm scope, timeline and payment terms")}</p>${deal.due ? `<p>Target follow-up: ${safe(deal.due)}</p>` : ""}</div></div>${contact ? `<div class="actions">${contact}</div>` : ""}<h2>Proposed scope</h2><ul class="scope"><li>One direct-order catalog using approved business and product information.</li><li>Up to ten products with current prices and availability.</li><li>A WhatsApp request flow tested with the business owner.</li><li>Three editable launch scripts and one recorded voiceover file.</li><li>One handoff session and one revision round.</li></ul><h2>Success criteria</h2><p>The catalog opens correctly on mobile and desktop, sends a complete order request to the approved business number, and can be updated from the delivered workspace.</p><div class="terms">Draft generated from SaborClick Studio. This document is not an invoice or binding agreement. Opening a payment link does not confirm payment. Final scope, delivery date, taxes, payment method, ownership and revision limits must be confirmed in writing before work begins.</div></main></body></html>`;
 }
