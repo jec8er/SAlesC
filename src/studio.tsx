@@ -24,6 +24,7 @@ import {
   LogOut,
   Copy,
   Target,
+  Atom,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -41,8 +42,31 @@ import {
   salesQueue,
   followUpText,
   outreachPack,
+  orbitHandoff,
+  orbitReadiness,
   scriptFor,
 } from "../lib/domain";
+type OrbitMemory = {
+  schemaVersion: 1;
+  preferences: Array<{
+    area: "creative" | "quality" | "publishing" | "operations" | "commercial";
+    key: string;
+    value: string;
+    updatedAt: string;
+  }>;
+  verifiedState: Array<{
+    kind: "artifact" | "publication" | "quality" | "analytics" | "operation";
+    statement: string;
+    evidenceRef: string;
+    observedAt: string;
+  }>;
+  nextActions: Array<{
+    id: string;
+    action: string;
+    status: "pending" | "in_progress" | "blocked" | "done";
+    updatedAt: string;
+  }>;
+};
 type EntityKind = "business" | "product" | "deal" | "receipt";
 type Entity = Business | Product | Deal | Receipt;
 type ModalState = { kind: EntityKind; item?: Entity };
@@ -83,6 +107,7 @@ const nav = [
   ["commerce", "Commerce", Store],
   ["sound", "SoundForge", AudioLines],
   ["pipeline", "Sales pipeline", Users],
+  ["orbit", "ORBIT delivery", Atom],
   ["revenue", "Revenue ledger", Wallet],
   ["settings", "Settings", Settings],
 ] as const;
@@ -149,6 +174,7 @@ function demo(): Workspace {
         nextAction: "Review the catalog proposal",
         due: "",
         notes: "Demo data. Not a real customer.",
+        businessId: "b1",
       },
       {
         id: "d2",
@@ -214,6 +240,15 @@ export default function Studio({
     [scriptProduct, setScriptProduct] = useState(""),
     [lang, setLang] = useState("en"),
     [script, setScript] = useState(""),
+    [orbitDealId, setOrbitDealId] = useState(""),
+    [orbitRevision, setOrbitRevision] = useState(0),
+    [orbitMemory, setOrbitMemory] = useState<OrbitMemory>({
+      schemaVersion: 1,
+      preferences: [],
+      verifiedState: [],
+      nextActions: [],
+    }),
+    [orbitLoaded, setOrbitLoaded] = useState(false),
     [recording, setRecording] = useState(false),
     [audioURL, setAudioURL] = useState("");
   const recorder = useRef<MediaRecorder | null>(null),
@@ -292,6 +327,140 @@ export default function Studio({
       setBusy(false);
     }
   }
+  async function loadOrbit() {
+    if (isDemo) {
+      setOrbitLoaded(true);
+      return;
+    }
+    try {
+      const response = await fetch("/api/ecomoda/memory/orbit");
+      const data = (await response.json()) as {
+        error?: string;
+        revision: number;
+        memory: OrbitMemory;
+      };
+      if (response.status === 401)
+        window.dispatchEvent(new Event("session-expired"));
+      if (!response.ok) throw Error(data.error || "Unable to load ORBIT");
+      setOrbitRevision(data.revision);
+      setOrbitMemory(data.memory);
+      setOrbitLoaded(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load ORBIT");
+    }
+  }
+  useEffect(() => {
+    if (view === "orbit" && loaded) loadOrbit();
+  }, [view, loaded, isDemo]);
+
+  async function queueInOrbit(deal: Deal) {
+    setOrbitDealId(deal.id);
+    setView("orbit");
+    if (isDemo) {
+      setToast("Demo handoff prepared — no real records changed");
+      return;
+    }
+    setBusy(true);
+    try {
+      let currentRevision = orbitRevision;
+      let currentMemory = orbitMemory;
+      if (!orbitLoaded) {
+        const currentResponse = await fetch("/api/ecomoda/memory/orbit");
+        const current = (await currentResponse.json()) as {
+          error?: string;
+          revision: number;
+          memory: OrbitMemory;
+        };
+        if (!currentResponse.ok)
+          throw Error(current.error || "Unable to load ORBIT");
+        currentRevision = current.revision;
+        currentMemory = current.memory;
+      }
+      const id = `fulfill-${deal.id}`
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, "-")
+        .slice(0, 80);
+      if (currentMemory.nextActions.some((action) => action.id === id)) {
+        setOrbitMemory(currentMemory);
+        setOrbitRevision(currentRevision);
+        setOrbitLoaded(true);
+        setToast("This opportunity is already in ORBIT delivery");
+        return;
+      }
+      const memory: OrbitMemory = {
+        ...currentMemory,
+        nextActions: [
+          ...currentMemory.nextActions,
+          {
+            id,
+            action: `Prepare and verify the approved launch deliverables for ${deal.name}`,
+            status: "pending",
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      const response = await fetch("/api/ecomoda/memory/orbit", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ revision: currentRevision, memory }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        revision: number;
+        memory: OrbitMemory;
+      };
+      if (!response.ok) throw Error(data.error || "Unable to queue ORBIT work");
+      setOrbitMemory(data.memory);
+      setOrbitRevision(data.revision);
+      setOrbitLoaded(true);
+      setToast("Opportunity handed to ORBIT delivery");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ORBIT handoff failed");
+      await loadOrbit();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function updateOrbitAction(
+    id: string,
+    status: OrbitMemory["nextActions"][number]["status"],
+  ) {
+    const memory: OrbitMemory = {
+      ...orbitMemory,
+      nextActions: orbitMemory.nextActions.map((action) =>
+        action.id === id
+          ? { ...action, status, updatedAt: new Date().toISOString() }
+          : action,
+      ),
+    };
+    if (isDemo) {
+      setOrbitMemory(memory);
+      setToast("Demo ORBIT status updated");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/ecomoda/memory/orbit", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ revision: orbitRevision, memory }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        revision: number;
+        memory: OrbitMemory;
+      };
+      if (!response.ok) throw Error(data.error || "Unable to update ORBIT");
+      setOrbitMemory(data.memory);
+      setOrbitRevision(data.revision);
+      setToast("ORBIT delivery status saved");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ORBIT update failed");
+      await loadOrbit();
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     if (!modal) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -332,7 +501,12 @@ export default function Studio({
     fmt = (n: number, c = currency) => moneyLabel(n, c),
     business = w.businesses.find((b) => b.id === selected) || w.businesses[0],
     products = w.products.filter((p) => p.businessId === business?.id),
-    queue = salesQueue(w);
+    queue = salesQueue(w),
+    orbitDeal =
+      w.deals.find((deal) => deal.id === orbitDealId) ||
+      w.deals.find((deal) => deal.stage === "won") ||
+      w.deals[0],
+    orbitStatus = orbitDeal ? orbitReadiness(w, orbitDeal) : null;
   async function copyText(content: string) {
     try {
       await navigator.clipboard.writeText(content);
@@ -352,6 +526,9 @@ export default function Studio({
     if (kind === "business") {
       next.businesses = next.businesses.filter((b) => b.id !== id);
       next.products = next.products.filter((p) => p.businessId !== id);
+      next.deals = next.deals.map((deal) =>
+        deal.businessId === id ? { ...deal, businessId: undefined } : deal,
+      );
     } else if (kind === "product")
       next.products = next.products.filter((p) => p.id !== id);
     else if (kind === "deal")
@@ -418,6 +595,7 @@ export default function Studio({
         priority: s("priority") as Deal["priority"],
         lastContact: s("lastContact"),
         objection: s("objection"),
+        businessId: s("businessId") || undefined,
       };
       upsert(next.deals, item);
     } else {
@@ -1271,7 +1449,9 @@ export default function Studio({
                                   onClick={() =>
                                     download(
                                       proposalHTML(
-                                        business || null,
+                                        w.businesses.find(
+                                          (item) => item.id === d.businessId,
+                                        ) || null,
                                         d,
                                         w.settings,
                                       ),
@@ -1281,6 +1461,12 @@ export default function Studio({
                                   }
                                 >
                                   <Download size={13} /> Draft proposal
+                                </button>
+                                <button
+                                  className="text-btn"
+                                  onClick={() => queueInOrbit(d)}
+                                >
+                                  <Atom size={13} /> Send to ORBIT
                                 </button>
                                 <button
                                   className="text-btn danger-text"
@@ -1326,6 +1512,185 @@ export default function Studio({
                       motion to test.
                     </p>
                   </section>
+                </>
+              )}
+              {view === "orbit" && (
+                <>
+                  <div className="section-title">
+                    <div>
+                      <p className="eyebrow">SALES → DELIVERY / ONE SYSTEM</p>
+                      <h1>ORBIT fulfills what you sold.</h1>
+                      <p>
+                        Turn an approved opportunity into controlled production,
+                        review and delivery without copying client data between
+                        tools.
+                      </p>
+                    </div>
+                    {orbitDeal && (
+                      <button
+                        className="btn primary"
+                        disabled={!orbitStatus?.ready}
+                        onClick={() =>
+                          download(
+                            orbitHandoff(w, orbitDeal),
+                            `${fileName(orbitDeal.name)}-orbit-handoff.txt`,
+                          )
+                        }
+                      >
+                        <Download size={16} /> Export handoff
+                      </button>
+                    )}
+                  </div>
+                  <div className="notice">
+                    ORBIT is part of this private workspace. It does not
+                    publish, contact customers or confirm revenue automatically.
+                  </div>
+                  {!w.deals.length ? (
+                    <Empty
+                      title="Close an opportunity first"
+                      detail="Add the opportunity in Sales pipeline, link its business and return here for delivery."
+                      action={() => setView("pipeline")}
+                      label="Open sales pipeline"
+                    />
+                  ) : (
+                    <>
+                      <div className="toolbar">
+                        <label className="orbit-picker">
+                          Opportunity
+                          <select
+                            value={orbitDeal?.id || ""}
+                            onChange={(event) =>
+                              setOrbitDealId(event.target.value)
+                            }
+                          >
+                            {w.deals.map((deal) => (
+                              <option key={deal.id} value={deal.id}>
+                                {deal.name} · {deal.stage}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {orbitDeal && (
+                          <button
+                            className="btn"
+                            disabled={busy}
+                            onClick={() => queueInOrbit(orbitDeal)}
+                          >
+                            <Atom size={16} /> Add to delivery queue
+                          </button>
+                        )}
+                      </div>
+                      {orbitDeal && orbitStatus && (
+                        <div className="orbit-grid">
+                          <section className="panel orbit-readiness">
+                            <p className="eyebrow">DELIVERY READINESS</p>
+                            <div className="orbit-score">
+                              <strong>{orbitStatus.score}</strong>
+                              <span>/ 100</span>
+                            </div>
+                            <h2>
+                              {orbitStatus.ready
+                                ? "Ready for controlled production"
+                                : "Complete the commercial handoff"}
+                            </h2>
+                            {orbitStatus.blockers.length ? (
+                              <ul>
+                                {orbitStatus.blockers.map((blocker) => (
+                                  <li key={blocker}>{blocker}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p>
+                                Won deal, linked business, approved scope and
+                                product facts are present.
+                              </p>
+                            )}
+                            <button
+                              className="btn"
+                              onClick={() => edit("deal", orbitDeal)}
+                            >
+                              <Pencil size={15} /> Edit handoff inputs
+                            </button>
+                          </section>
+                          <section className="panel">
+                            <p className="eyebrow">SHARED COMMERCIAL CONTEXT</p>
+                            <h2>{orbitDeal.name}</h2>
+                            <div className="source-row">
+                              <Check size={16} />
+                              {orbitStatus.business?.name ||
+                                "Business not linked"}
+                            </div>
+                            <div className="source-row">
+                              <Check size={16} />
+                              {orbitStatus.products.length} approved product
+                              {orbitStatus.products.length === 1 ? "" : "s"}
+                            </div>
+                            <div className="source-row">
+                              <Check size={16} />
+                              {fmt(orbitDeal.value)} agreed opportunity value
+                            </div>
+                            <p className="fineprint">
+                              Revenue is counted only after a payment is
+                              recorded in the ledger.
+                            </p>
+                          </section>
+                        </div>
+                      )}
+                      <section className="close-desk orbit-queue">
+                        <div className="close-desk-head">
+                          <div>
+                            <p className="eyebrow">ORBIT / DELIVERY QUEUE</p>
+                            <h2>One queue from sale to handoff.</h2>
+                          </div>
+                          <Atom size={34} />
+                        </div>
+                        {!orbitLoaded ? (
+                          <p className="queue-empty">Loading ORBIT delivery…</p>
+                        ) : !orbitMemory.nextActions.length ? (
+                          <p className="queue-empty">
+                            No delivery work yet. Choose an opportunity above.
+                          </p>
+                        ) : (
+                          <div className="action-queue">
+                            {orbitMemory.nextActions.map((action) => (
+                              <article key={action.id}>
+                                <div className="queue-rank">
+                                  {action.status === "done" ? (
+                                    <Check size={18} />
+                                  ) : (
+                                    <Atom size={18} />
+                                  )}
+                                </div>
+                                <div className="queue-main">
+                                  <strong>{action.action}</strong>
+                                  <span>{action.status.replace("_", " ")}</span>
+                                </div>
+                                <select
+                                  aria-label={`Status for ${action.action}`}
+                                  value={action.status}
+                                  disabled={busy}
+                                  onChange={(event) =>
+                                    updateOrbitAction(
+                                      action.id,
+                                      event.target
+                                        .value as OrbitMemory["nextActions"][number]["status"],
+                                    )
+                                  }
+                                >
+                                  <option value="pending">pending</option>
+                                  <option value="in_progress">
+                                    in progress
+                                  </option>
+                                  <option value="blocked">blocked</option>
+                                  <option value="done">done</option>
+                                </select>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    </>
+                  )}
                 </>
               )}
               {view === "revenue" && (
@@ -1803,6 +2168,20 @@ export default function Studio({
                       required
                     />
                     <Field name="contact" label="Contact (optional)" />
+                    <label>
+                      Linked business
+                      <select
+                        name="businessId"
+                        defaultValue={String(modalValue("businessId") || "")}
+                      >
+                        <option value="">Not linked yet</option>
+                        {w.businesses.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <Field name="stage" label="Stage" options={[...stages]} />
                     <Field
                       name="source"

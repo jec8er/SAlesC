@@ -10,6 +10,8 @@ import {
   salesQueue,
   followUpText,
   outreachPack,
+  orbitReadiness,
+  orbitHandoff,
 } from "../lib/domain.ts";
 const receipt = {
   id: "r",
@@ -256,5 +258,66 @@ test("proposal may expose configured seller actions without treating a link as p
   assert.match(html, /https:\/\/pay\.example\/deposit/);
   assert.match(html, /does not confirm payment/);
   workspace.settings.paymentLink = "javascript:alert(1)";
+  assert.equal(workspaceSchema.safeParse(workspace).success, false);
+});
+
+test("ORBIT readiness requires a won deal linked to real fulfillment facts", () => {
+  const workspace = emptyWorkspace();
+  workspace.businesses = [
+    {
+      id: "b1",
+      name: "Casa Verde",
+      category: "Cafe",
+      phone: "12125550100",
+      currency: "USD",
+      description: "Neighborhood coffee and pastries.",
+    },
+  ];
+  workspace.products = [
+    {
+      id: "p1",
+      businessId: "b1",
+      name: "Coffee box",
+      description: "Six pastries and house coffee.",
+      price: 38,
+      cost: 16,
+      stock: 8,
+      image: "",
+    },
+  ];
+  const deal = {
+    id: "d1",
+    name: "Casa Verde launch",
+    contact: "Maya",
+    stage: "won" as const,
+    value: 199,
+    nextAction: "Prepare launch kit",
+    due: "2026-10-15",
+    notes: "Catalog, three scripts and handoff approved.",
+    businessId: "b1",
+  };
+  workspace.deals = [deal];
+  assert.equal(orbitReadiness(workspace, deal).ready, true);
+  const handoff = orbitHandoff(workspace, deal);
+  assert.match(handoff, /Ready for controlled production/);
+  assert.match(handoff, /Coffee box/);
+  assert.match(handoff, /Nothing .* automatically/i);
+});
+
+test("workspace rejects an opportunity linked to a missing business", () => {
+  const workspace = emptyWorkspace();
+  workspace.deals = [
+    {
+      id: "d1",
+      name: "Orphan opportunity",
+      contact: "Owner",
+      stage: "won",
+      value: 199,
+      nextAction: "Deliver",
+      due: "",
+      notes: "Approved",
+      businessId: "missing",
+    },
+  ];
   assert.equal(workspaceSchema.safeParse(workspace).success, false);
 });

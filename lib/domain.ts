@@ -54,6 +54,7 @@ export const dealSchema = z
       .regex(/^$|^\d{4}-\d{2}-\d{2}$/)
       .optional(),
     objection: z.string().max(400).optional(),
+    businessId: z.string().max(180).optional(),
   })
   .strict();
 export const receiptSchema = z
@@ -160,6 +161,12 @@ export const workspaceSchema = z
         code: "custom",
         message: "A product must belong to a business",
         path: ["products"],
+      });
+    if (w.deals.some((deal) => deal.businessId && !ids.has(deal.businessId)))
+      c.addIssue({
+        code: "custom",
+        message: "An opportunity must reference an existing business",
+        path: ["deals"],
       });
   });
 export type Workspace = z.infer<typeof workspaceSchema>;
@@ -274,6 +281,65 @@ export function outreachPack(deal: Deal, settings: Workspace["settings"]) {
   const first = followUpText(deal, settings);
   const seller = settings.sellerName || "SaborClick Studio";
   return `SALES FOLLOW-UP PACK — ${deal.name}\n\n1. CURRENT MESSAGE\n${first}\n\n2. VALUE FOLLOW-UP (2 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — following up from ${seller}. The goal is not to add more software; it is to make the offer, ordering path and handoff clearer. Is this still worth reviewing?\n\n3. CLOSE THE LOOP (5 BUSINESS DAYS LATER)\nHi ${deal.contact || deal.name} — I’m closing the loop on this for now. If improving the direct-order experience becomes a priority, reply here and I’ll reopen the scope.\n\nInternal next action: ${deal.nextAction || "Choose a specific next action before sending."}\n${deal.objection ? `Known objection: ${deal.objection}\n` : ""}No message has been sent automatically.`;
+}
+
+export function orbitReadiness(workspace: Workspace, deal: Deal) {
+  const business = workspace.businesses.find(
+    (item) => item.id === deal.businessId,
+  );
+  const products = business
+    ? workspace.products.filter((item) => item.businessId === business.id)
+    : [];
+  const blockers: string[] = [];
+  if (deal.stage !== "won") blockers.push("mark the opportunity won");
+  if (!business) blockers.push("link a business");
+  if (!products.length) blockers.push("add at least one real product");
+  if (!deal.contact.trim()) blockers.push("record the client contact");
+  if (!deal.notes.trim()) blockers.push("record approved scope notes");
+  return {
+    business,
+    products,
+    blockers,
+    ready: blockers.length === 0,
+    score: Math.round(((5 - blockers.length) / 5) * 100),
+  };
+}
+
+export function orbitHandoff(workspace: Workspace, deal: Deal) {
+  const { business, products, blockers, ready } = orbitReadiness(
+    workspace,
+    deal,
+  );
+  const lines = products.map(
+    (product) =>
+      `- ${product.name}: ${moneyLabel(product.price, business?.currency)}; stock ${product.stock}; ${product.description || "description pending"}`,
+  );
+  return `ORBIT DELIVERY HANDOFF — ${deal.name}
+
+STATUS
+${ready ? "Ready for controlled production" : `Blocked: ${blockers.join("; ")}`}
+
+COMMERCIAL CONTEXT
+Offer: ${workspace.settings.offerName || "Direct Commerce Launch"}
+Agreed opportunity value: ${moneyLabel(deal.value, workspace.settings.currency)}
+Client contact: ${deal.contact || "Not recorded"}
+Linked business: ${business?.name || "Not linked"}
+Approved scope notes: ${deal.notes || "Not recorded"}
+
+BUSINESS FACTS
+${business ? `${business.name} · ${business.category}\n${business.description}\nWhatsApp: +${business.phone}` : "Business details pending"}
+
+PRODUCT FACTS
+${lines.length ? lines.join("\n") : "No products recorded"}
+
+ORBIT PRODUCTION GATES
+1. Use only the approved facts above; do not invent claims, prices or availability.
+2. Produce the catalog and launch assets for human review.
+3. Verify mobile layout, links, WhatsApp destination and current inventory.
+4. Obtain explicit owner approval before publication or delivery.
+5. Record payment separately; production status never proves revenue.
+
+Nothing in this handoff publishes, messages a customer or charges a payment automatically.`;
 }
 export function escapeHTML(s: string) {
   return s.replace(
