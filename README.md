@@ -1,39 +1,65 @@
 # SaborClick Studio
 
-One private full-stack operating workspace consolidating jec8er's SaborClick concept, Express service foundation and previously empty SoundForge repository.
+A standalone commerce, content and revenue workspace for jec8er. Runs directly from this GitHub repository with **React + Vite, Express and SQLite**. No Sites, Cloudflare, Vinext, ChatGPT authentication or third-party database account is required.
 
-## What works
+## Start locally (Windows, macOS or Linux)
 
-- ChatGPT sign-in with server-side user isolation.
-- Cloudflare D1 cloud records with optimistic concurrency to prevent overwriting another tab.
-- Business and product catalog CRUD; USD/COP kept separate; image URL and phone validation.
-- Exportable standalone HTML customer catalogs. WhatsApp requests go to the business number, with price, availability and fulfillment confirmation. No customer payment is implied by a request.
-- Sales opportunities, next actions, stages and follow-up dates.
-- Manual collection ledger with receipt references, delivery/labor costs, fees and refunds. Pending payments and won opportunities never count as collected revenue.
-- SoundForge template-assisted English/Spanish scripts and browser microphone recording. Download audio before closing the tab.
-- Validated JSON export/restore. Isolated demo mode never writes real records.
-
-## Commercial approach
-
-Sell a defined catalog-and-content setup service first. Default test prices are **USD 199 setup** and **USD 39/month for agreed updates**. These are unvalidated offer hypotheses, not market pricing, customers, active subscriptions or predicted income. A paid service needs agreed scope, delivery and a real collection method.
-
-The private workspace is not publicly accessible to buyers. Exported customer catalogs can be delivered separately or hosted after explicit audience selection. Payment processing, AI generation, social publishing and autonomous prospecting are not connected. No sales or revenue have occurred as a result of this build.
-
-## Development
-
-Node 22.13+; use the pinned package manager and lockfile.
+Install Node.js 24 or newer, then open a terminal in this repository:
 
 ```sh
-npm run dev
-node node_modules/typescript/bin/tsc --noEmit
-node --experimental-strip-types --test tests/domain.test.ts
+npm ci --ignore-scripts
+npm run setup
+npm run build
+npm start
+```
+
+`setup` asks for your owner password with hidden input and creates an ignored `.env` file containing its salted hash. There is no default password. Open **http://127.0.0.1:3001**, then sign in. The server binds only to your own computer by default.
+
+For frontend development, after setup use `npm run dev`. Open the Vite URL printed in the terminal; it proxies `/api` to the Express server. Both processes stop together.
+
+## Features
+
+- Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
+- Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
+- Business/product management and standalone customer catalog exports with real prices and WhatsApp requests to the business number.
+- Bilingual launch-script templates and local microphone recording/downloads.
+- Opportunity tracking with next actions and follow-up dates.
+- Manual revenue ledger separating proposals, pending payments and documented collections. Costs, fees and refunds reduce contribution margin. USD/COP totals never mix.
+- Validated JSON backups and a separate illustrative demo that does not write real records.
+
+Customer catalogs contain approved public product facts only, not cost data or prospect records. Requests are not automatically paid, fulfilled or confirmed orders. Scripts and recordings stay in the browser tab until downloaded.
+
+## Tests and CI
+
+```sh
+npm test
 npm run build
 ```
 
-Hosting uses Sites with the DB D1 binding. Apply committed Drizzle migrations through the supported deployment flow. Standalone deployment must provide trusted authentication headers via an authenticated ingress; do not expose the Worker directly with user-controlled identity headers. Runtime secrets and customer data must never be committed.
+Tests exercise real Express HTTP endpoints and SQLite persistence: login, protected records, save/reload, conflicting revisions, invalid JSON and records, CSRF, origin checks, logout, login throttling and restart persistence. Domain tests cover revenue math and safe catalog exports. GitHub Actions repeats tests and production builds.
 
-## Consolidation
+## Production server
 
-`app/` is the unified interface and authenticated API. `lib/domain.ts` is the shared validation, revenue and export logic. `db/` and `drizzle/` define durable storage. `legacy/` preserves the original SaborClick HTML and Express sources for provenance, not production use. SoundForge had no source files to migrate.
+GitHub stores and validates the code; it does not run a persistent Express server or SQLite database. No new hosting service is provisioned by this change.
 
-See [commercial strategy](docs/commercial-strategy.md) and [validation](docs/validation.md).
+For deployment on a server you control:
+
+- Configure `OWNER_PASSWORD_HASH` with `npm run password:hash`; never commit the password or hash.
+- Set `NODE_ENV=production` and `PUBLIC_ORIGIN` to the exact HTTPS origin, with no trailing slash.
+- Terminate HTTPS at your reverse proxy. Set `HOST=0.0.0.0` only where needed, with network access restricted to your proxy.
+- Keep `DATABASE_PATH` on a persistent volume and maintain backups. Use one application replica per SQLite database. JSON backup exports are available from Settings.
+- The Dockerfile builds the frontend and runs the backend as the non-root `node` user. Mount a writable `/app/data` volume and provide secrets through the environment.
+
+## Revenue approach
+
+The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. No autonomous outreach, AI generation, payment processing or social publishing is connected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
+
+## Project structure
+
+- `src/`: React workspace and independent sign-in screen.
+- `server/`: Express API, sessions, password hashing and SQLite persistence.
+- `lib/domain.ts`: validation, contribution calculations and customer exports.
+- `tests/`: domain and HTTP/database integration tests.
+- `legacy/`: unchanged original SaborClick/Express sources, preserved for history.
+
+Existing JSON exports from the earlier workspace can be restored in Settings after signing in. The previous hosted database is not automatically migrated or accessed.
