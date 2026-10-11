@@ -25,6 +25,7 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Bilingual launch-script templates and local microphone recording/downloads.
 - A Close Desk that prioritizes overdue opportunities, exposes missing sales information, prepares reviewable follow-up messages and exports a three-touch sequence.
 - Opportunity tracking with lead source, priority, objections, contact dates and downloadable branded proposals with optional WhatsApp and HTTPS deposit actions.
+- One connected ORBIT delivery flow: link a deal to its business, check fulfillment readiness, persist the production queue and export a fact-bounded handoff without copying records into another product.
 - Manual revenue ledger separating proposals, pending payments and documented collections. Costs, fees and refunds reduce contribution margin. USD/COP totals never mix.
 - Validated JSON backups and a separate illustrative demo that does not write real records.
 
@@ -54,7 +55,7 @@ For deployment on a server you control:
 
 ## Revenue approach
 
-The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. The Close Desk creates a disciplined path from a real prospect to a reviewed proposal and follow-up; it never sends outreach automatically. A configured deposit URL is only a link to an external processor and never marks a payment as collected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
+The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. The Close Desk and ORBIT now form one path from prospect to controlled delivery; neither sends outreach or publishes automatically. A configured deposit URL is only a link to an external processor and never marks a payment as collected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
 
 ## Project structure
 
