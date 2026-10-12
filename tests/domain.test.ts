@@ -297,6 +297,15 @@ test("ORBIT readiness requires a won deal linked to real fulfillment facts", () 
     businessId: "b1",
   };
   workspace.deals = [deal];
+  workspace.receipts = [
+    {
+      ...receipt,
+      id: "deposit",
+      label: "Deposit",
+      gross: 99.5,
+      dealId: "d1",
+    },
+  ];
   assert.equal(orbitReadiness(workspace, deal).ready, true);
   const handoff = orbitHandoff(workspace, deal);
   assert.match(handoff, /Ready for controlled production/);
@@ -319,5 +328,36 @@ test("workspace rejects an opportunity linked to a missing business", () => {
       businessId: "missing",
     },
   ];
+  assert.equal(workspaceSchema.safeParse(workspace).success, false);
+});
+
+test("ORBIT does not unlock delivery for a pending or unlinked payment", () => {
+  const workspace = emptyWorkspace();
+  const deal = {
+    id: "d1",
+    name: "Paid launch",
+    contact: "Owner",
+    stage: "won" as const,
+    value: 199,
+    nextAction: "Deliver",
+    due: "",
+    notes: "Approved scope",
+  };
+  workspace.deals = [deal];
+  workspace.receipts = [
+    {
+      ...receipt,
+      status: "pending",
+      reference: "",
+      dealId: "d1",
+    },
+  ];
+  assert.equal(orbitReadiness(workspace, deal).ready, false);
+  assert.ok(
+    orbitReadiness(workspace, deal).blockers.includes(
+      "verify a deposit or payment",
+    ),
+  );
+  workspace.receipts[0] = { ...receipt, dealId: "missing" };
   assert.equal(workspaceSchema.safeParse(workspace).success, false);
 });

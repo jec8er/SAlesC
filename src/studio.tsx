@@ -169,7 +169,7 @@ function demo(): Workspace {
         id: "d1",
         name: "Example café owner",
         contact: "Illustrative prospect",
-        stage: "proposal",
+        stage: "won",
         value: 199,
         nextAction: "Review the catalog proposal",
         due: "",
@@ -200,6 +200,7 @@ function demo(): Workspace {
         status: "paid",
         reference: "DEMO ONLY",
         date: "2026-10-11",
+        dealId: "d1",
       },
     ],
     settings: {
@@ -531,9 +532,12 @@ export default function Studio({
       );
     } else if (kind === "product")
       next.products = next.products.filter((p) => p.id !== id);
-    else if (kind === "deal")
+    else if (kind === "deal") {
       next.deals = next.deals.filter((p) => p.id !== id);
-    else next.receipts = next.receipts.filter((p) => p.id !== id);
+      next.receipts = next.receipts.map((receipt) =>
+        receipt.dealId === id ? { ...receipt, dealId: undefined } : receipt,
+      );
+    } else next.receipts = next.receipts.filter((p) => p.id !== id);
     await persist(next);
   }
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -611,10 +615,56 @@ export default function Studio({
         status: s("status") as Receipt["status"],
         reference: s("reference"),
         date: s("date"),
+        dealId: s("dealId") || undefined,
       };
       upsert(next.receipts, item);
     }
     if (await persist(next)) setModal(null);
+  }
+  async function requestDeposit(deal: Deal) {
+    const existing = w.receipts.find((receipt) => receipt.dealId === deal.id);
+    if (existing) {
+      setView("revenue");
+      setToast(
+        existing.status === "paid"
+          ? "A verified payment is already linked to this opportunity"
+          : "A payment request is already linked to this opportunity",
+      );
+      return;
+    }
+    if (deal.stage !== "won") {
+      setError("Mark the opportunity won before requesting a deposit.");
+      return;
+    }
+    const percent = w.settings.depositPercent ?? 50;
+    const amount = Math.round(deal.value * percent) / 100;
+    if (amount <= 0) {
+      setError(
+        "Set a positive opportunity value and deposit percentage first.",
+      );
+      return;
+    }
+    const next = structuredClone(w);
+    next.receipts.push({
+      id: crypto.randomUUID(),
+      label: `${percent}% deposit · ${deal.name}`,
+      kind: "service",
+      currency: w.settings.currency,
+      gross: amount,
+      cost: 0,
+      fees: 0,
+      refund: 0,
+      status: "pending",
+      reference: "",
+      date: new Intl.DateTimeFormat("en-CA").format(new Date()),
+      dealId: deal.id,
+    });
+    if (await persist(next)) {
+      setView("revenue");
+      setToast(
+        `Deposit due created for ${moneyLabel(amount, w.settings.currency)}`,
+      );
+    }
   }
   async function record() {
     if (recording) {
@@ -1462,11 +1512,27 @@ export default function Studio({
                                 >
                                   <Download size={13} /> Draft proposal
                                 </button>
+                                {d.stage === "won" && (
+                                  <button
+                                    className="text-btn"
+                                    onClick={() => requestDeposit(d)}
+                                  >
+                                    <Wallet size={13} />
+                                    {w.receipts.some(
+                                      (receipt) => receipt.dealId === d.id,
+                                    )
+                                      ? "View payment"
+                                      : "Create deposit due"}
+                                  </button>
+                                )}
                                 <button
                                   className="text-btn"
-                                  onClick={() => queueInOrbit(d)}
+                                  onClick={() => {
+                                    setOrbitDealId(d.id);
+                                    setView("orbit");
+                                  }}
                                 >
-                                  <Atom size={13} /> Send to ORBIT
+                                  <Atom size={13} /> Open in ORBIT
                                 </button>
                                 <button
                                   className="text-btn danger-text"
@@ -1573,7 +1639,7 @@ export default function Studio({
                         {orbitDeal && (
                           <button
                             className="btn"
-                            disabled={busy}
+                            disabled={busy || !orbitStatus?.ready}
                             onClick={() => queueInOrbit(orbitDeal)}
                           >
                             <Atom size={16} /> Add to delivery queue
@@ -1601,8 +1667,8 @@ export default function Studio({
                               </ul>
                             ) : (
                               <p>
-                                Won deal, linked business, approved scope and
-                                product facts are present.
+                                Won deal, linked business, approved scope,
+                                product facts and verified payment are present.
                               </p>
                             )}
                             <button
@@ -1611,6 +1677,15 @@ export default function Studio({
                             >
                               <Pencil size={15} /> Edit handoff inputs
                             </button>
+                            {orbitDeal.stage === "won" &&
+                              orbitStatus.collected <= 0 && (
+                                <button
+                                  className="btn"
+                                  onClick={() => requestDeposit(orbitDeal)}
+                                >
+                                  <Wallet size={15} /> Create deposit due
+                                </button>
+                              )}
                           </section>
                           <section className="panel">
                             <p className="eyebrow">SHARED COMMERCIAL CONTEXT</p>
@@ -1628,6 +1703,10 @@ export default function Studio({
                             <div className="source-row">
                               <Check size={16} />
                               {fmt(orbitDeal.value)} agreed opportunity value
+                            </div>
+                            <div className="source-row">
+                              <Check size={16} />
+                              {fmt(orbitStatus.collected)} verified and linked
                             </div>
                             <p className="fineprint">
                               Revenue is counted only after a payment is
@@ -1749,6 +1828,9 @@ export default function Studio({
                               <strong>{r.label}</strong>
                               <small>
                                 {r.kind} · {r.currency}
+                                {r.dealId
+                                  ? ` · ${w.deals.find((deal) => deal.id === r.dealId)?.name || "linked opportunity"}`
+                                  : ""}
                               </small>
                             </td>
                             <td>{r.date}</td>
@@ -2225,6 +2307,20 @@ export default function Studio({
                 {modal.kind === "receipt" && (
                   <>
                     <Field name="label" label="Payment description" required />
+                    <label>
+                      Linked opportunity
+                      <select
+                        name="dealId"
+                        defaultValue={String(modalValue("dealId") || "")}
+                      >
+                        <option value="">Not linked</option>
+                        {w.deals.map((deal) => (
+                          <option key={deal.id} value={deal.id}>
+                            {deal.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <Field
                       name="kind"
                       label="Type"
