@@ -70,6 +70,7 @@ export const receiptSchema = z
     status: z.enum(["pending", "paid", "refunded"]),
     reference: z.string().max(180),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dealId: z.string().max(180).optional(),
   })
   .strict()
   .superRefine((r, c) => {
@@ -167,6 +168,17 @@ export const workspaceSchema = z
         code: "custom",
         message: "An opportunity must reference an existing business",
         path: ["deals"],
+      });
+    const dealIds = new Set(w.deals.map((deal) => deal.id));
+    if (
+      w.receipts.some(
+        (receipt) => receipt.dealId && !dealIds.has(receipt.dealId),
+      )
+    )
+      c.addIssue({
+        code: "custom",
+        message: "A payment must reference an existing opportunity",
+        path: ["receipts"],
       });
   });
 export type Workspace = z.infer<typeof workspaceSchema>;
@@ -290,18 +302,28 @@ export function orbitReadiness(workspace: Workspace, deal: Deal) {
   const products = business
     ? workspace.products.filter((item) => item.businessId === business.id)
     : [];
+  const collected = workspace.receipts
+    .filter(
+      (receipt) =>
+        receipt.dealId === deal.id &&
+        receipt.status === "paid" &&
+        receipt.currency === workspace.settings.currency,
+    )
+    .reduce((total, receipt) => total + receipt.gross - receipt.refund, 0);
   const blockers: string[] = [];
   if (deal.stage !== "won") blockers.push("mark the opportunity won");
   if (!business) blockers.push("link a business");
   if (!products.length) blockers.push("add at least one real product");
   if (!deal.contact.trim()) blockers.push("record the client contact");
   if (!deal.notes.trim()) blockers.push("record approved scope notes");
+  if (collected <= 0) blockers.push("verify a deposit or payment");
   return {
     business,
     products,
+    collected,
     blockers,
     ready: blockers.length === 0,
-    score: Math.round(((5 - blockers.length) / 5) * 100),
+    score: Math.round(((6 - blockers.length) / 6) * 100),
   };
 }
 
@@ -337,7 +359,7 @@ ORBIT PRODUCTION GATES
 2. Produce the catalog and launch assets for human review.
 3. Verify mobile layout, links, WhatsApp destination and current inventory.
 4. Obtain explicit owner approval before publication or delivery.
-5. Record payment separately; production status never proves revenue.
+5. Keep the verified deposit or payment reference linked to this opportunity.
 
 Nothing in this handoff publishes, messages a customer or charges a payment automatically.`;
 }
