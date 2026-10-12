@@ -14,6 +14,8 @@ import {
   orbitHandoff,
   emptyTradingWorkspace,
   paperMetrics,
+  parseCandleCSV,
+  runSMABacktest,
   strategyRisk,
 } from "../lib/domain.ts";
 const receipt = {
@@ -110,6 +112,107 @@ test("paper metrics separate modeled equity, risk and win rate", () => {
     winRate: 100,
     closedTrades: 1,
   });
+});
+
+test("candle CSV parsing validates headers, chronology and price ranges", () => {
+  const rows = Array.from({ length: 30 }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return `2026-01-${day}T00:00:00Z,100,105,95,102,1000`;
+  });
+  const candles = parseCandleCSV(
+    ["timestamp,open,high,low,close,volume", ...rows].join("\n"),
+  );
+  assert.equal(candles.length, 30);
+  assert.equal(candles[0].close, 102);
+  assert.throws(
+    () =>
+      parseCandleCSV(
+        ["timestamp,open,high,low,close", ...rows.slice(0, 29), rows[0]].join(
+          "\n",
+        ),
+      ),
+    /strictly increasing time order/,
+  );
+});
+
+test("SMA backtests are deterministic, fee-aware and bounded", () => {
+  const candles = Array.from({ length: 120 }, (_, index) => {
+    const previous = 100 + Math.sin((index - 1) / 4) * 12 + index * 0.05;
+    const close = 100 + Math.sin(index / 4) * 12 + index * 0.05;
+    return {
+      timestamp: new Date(Date.UTC(2026, 0, 1, index)).toISOString(),
+      open: previous,
+      high: Math.max(previous, close) + 1,
+      low: Math.min(previous, close) - 1,
+      close,
+      volume: 1000,
+    };
+  });
+  const options = {
+    startingBalance: 10000,
+    fastWindow: 3,
+    slowWindow: 8,
+    feeBps: 10,
+    positionPercent: 10,
+  };
+  const result = runSMABacktest(candles, options);
+  const repeated = runSMABacktest(candles, options);
+  assert.deepEqual(result, repeated);
+  assert.ok(result.trades > 0);
+  assert.ok(result.maxDrawdownPercent >= 0);
+  assert.ok(result.maxDrawdownPercent <= 100);
+  assert.equal(
+    result.netReturnPercent,
+    ((result.endingBalance - 10000) / 10000) * 100,
+  );
+  assert.throws(
+    () => runSMABacktest(candles, { ...options, fastWindow: 10 }),
+    /fast < slow/,
+  );
+});
+
+test("older ORBIT workspaces gain an empty backtest history on parse", () => {
+  const workspace = emptyWorkspace();
+  const legacyTrading = { ...workspace.trading } as Record<string, unknown>;
+  delete legacyTrading.backtests;
+  const legacy = { ...workspace, trading: legacyTrading };
+  const parsed = workspaceSchema.parse(legacy);
+  assert.deepEqual(parsed.trading?.backtests, []);
+});
+
+test("backtest summaries cannot reference a missing strategy", () => {
+  const workspace = emptyWorkspace();
+  workspace.trading!.backtests.push({
+    id: "bt-orphan",
+    strategyId: "missing",
+    symbol: "BTC/USDC",
+    sourceName: "candles.csv",
+    sourceHash: "a".repeat(64),
+    algorithm: "sma-crossover-v1",
+    fastWindow: 20,
+    slowWindow: 50,
+    feeBps: 10,
+    positionPercent: 10,
+    bars: 100,
+    from: "2026-01-01T00:00:00.000Z",
+    to: "2026-04-10T00:00:00.000Z",
+    startingBalance: 10000,
+    endingBalance: 10100,
+    netReturnPercent: 1,
+    buyHoldReturnPercent: 2,
+    maxDrawdownPercent: 3,
+    winRate: 50,
+    trades: 4,
+    profitFactor: 1.2,
+    testedAt: "2026-10-12T12:00:00.000Z",
+  });
+  const parsed = workspaceSchema.safeParse(workspace);
+  assert.equal(parsed.success, false);
+  if (!parsed.success)
+    assert.match(
+      parsed.error.issues.map((issue) => issue.message).join(" "),
+      /backtest must reference an existing strategy/,
+    );
 });
 test("refunds, costs and fees reduce margin and currencies remain separate", () => {
   const w = emptyWorkspace();

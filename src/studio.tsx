@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Atom,
+  BarChart3,
   Bot,
   BrainCircuit,
   Check,
@@ -23,12 +24,14 @@ import {
   Sparkles,
   Target,
   TriangleAlert,
+  Upload,
   WalletCards,
   X,
   type LucideIcon,
 } from "lucide-react";
 import {
   type AgentEvent,
+  type BacktestResult,
   type Strategy,
   type TradingWorkspace,
   type Workspace,
@@ -36,6 +39,8 @@ import {
   emptyWorkspace,
   moneyLabel,
   paperMetrics,
+  parseCandleCSV,
+  runSMABacktest,
   strategyRisk,
   tradingState,
   workspaceSchema,
@@ -44,6 +49,7 @@ import {
 const nav = [
   ["command", "Command center", Orbit],
   ["strategies", "Strategies", BrainCircuit],
+  ["backtests", "Backtesting", BarChart3],
   ["agents", "Agent network", Bot],
   ["risk", "Risk control", ShieldCheck],
   ["ledger", "Paper ledger", WalletCards],
@@ -128,15 +134,36 @@ function demoWorkspace(): Workspace {
   };
   return workspace;
 }
-function downloadJSON(value: unknown, name: string) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
-  );
+function downloadContent(content: string, name: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadJSON(value: unknown, name: string) {
+  downloadContent(JSON.stringify(value, null, 2), name, "application/json");
+}
+function downloadSampleCandles() {
+  const rows = Array.from({ length: 180 }, (_, index) => {
+    const open = 100 + Math.sin((index - 1) / 7) * 9 + index * 0.04;
+    const close = 100 + Math.sin(index / 7) * 9 + index * 0.04;
+    const time = new Date(Date.UTC(2026, 0, 1, index)).toISOString();
+    return [
+      time,
+      open.toFixed(2),
+      (Math.max(open, close) + 1).toFixed(2),
+      (Math.min(open, close) - 1).toFixed(2),
+      close.toFixed(2),
+      1000 + index * 3,
+    ].join(",");
+  });
+  downloadContent(
+    ["timestamp,open,high,low,close,volume", ...rows].join("\n"),
+    "orbit-sample-candles.csv",
+    "text/csv",
+  );
 }
 
 export default function Studio({
@@ -158,11 +185,15 @@ export default function Studio({
   const [toast, setToast] = useState("");
   const [composer, setComposer] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+  const [latestBacktestId, setLatestBacktestId] = useState("");
   const trading = tradingState(workspace);
   const metrics = paperMetrics(trading);
   const selected =
     trading.strategies.find((item) => item.id === selectedId) ||
     trading.strategies[0];
+  const latestBacktest =
+    trading.backtests.find((item) => item.id === latestBacktestId) ||
+    trading.backtests[0];
 
   async function load() {
     setError("");
@@ -398,6 +429,94 @@ export default function Studio({
       },
       "Risk policy saved",
     );
+  }
+
+  async function runBacktest(form: HTMLFormElement) {
+    setError("");
+    const data = new FormData(form);
+    const strategyId = String(data.get("strategyId") || "");
+    const strategy = trading.strategies.find((item) => item.id === strategyId);
+    const file = data.get("dataset");
+    if (!strategy) {
+      setError("Select a strategy before running a backtest.");
+      return;
+    }
+    if (!(file instanceof File) || !file.size) {
+      setError("Choose a CSV dataset first.");
+      return;
+    }
+    if (file.size > 8_000_000) {
+      setError("CSV files are limited to 8 MB.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const source = await file.text();
+      const candles = parseCandleCSV(source);
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(source),
+      );
+      const sourceHash = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join("");
+      const fastWindow = Number(data.get("fastWindow"));
+      const slowWindow = Number(data.get("slowWindow"));
+      const feeBps = Number(data.get("feeBps"));
+      const result = runSMABacktest(candles, {
+        startingBalance: trading.startingBalance,
+        fastWindow,
+        slowWindow,
+        feeBps,
+        positionPercent: trading.maxPositionPercent,
+      });
+      const record: BacktestResult = {
+        id: crypto.randomUUID(),
+        strategyId,
+        symbol: strategy.symbol,
+        sourceName: file.name,
+        sourceHash,
+        algorithm: "sma-crossover-v1",
+        fastWindow,
+        slowWindow,
+        feeBps,
+        positionPercent: trading.maxPositionPercent,
+        bars: candles.length,
+        from: candles[0].timestamp,
+        to: candles.at(-1)!.timestamp,
+        startingBalance: trading.startingBalance,
+        ...result,
+        testedAt: timestamp(),
+      };
+      const saved = await persist(
+        {
+          ...trading,
+          backtests: [record, ...trading.backtests],
+          events: [
+            agentEvent(
+              "auditor",
+              "observed",
+              `${strategy.name} backtest recorded from ${candles.length} historical candles.`,
+            ),
+            agentEvent(
+              "strategist",
+              "simulated",
+              `SMA ${fastWindow}/${slowWindow} completed with ${record.netReturnPercent.toFixed(2)}% modeled historical return.`,
+            ),
+            ...trading.events,
+          ],
+        },
+        "Historical backtest saved",
+      );
+      if (saved) {
+        setLatestBacktestId(record.id);
+        form.reset();
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Backtest failed");
+    } finally {
+      setBusy(false);
+    }
   }
   const agentStates = useMemo(
     () =>
@@ -765,6 +884,247 @@ export default function Studio({
                     </div>
                   )}
                 </div>
+              </>
+            )}
+            {view === "backtests" && (
+              <>
+                <PageTitle
+                  kicker="HISTORICAL EVIDENCE, NOT PROMISES"
+                  title="Backtesting lab"
+                  detail="Test a transparent moving-average system against your own chronological OHLCV data. ORBIT stores the result summary, never the raw dataset."
+                />
+                <div className="backtest-layout">
+                  <form
+                    className="glass-panel backtest-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      runBacktest(event.currentTarget);
+                    }}
+                  >
+                    <p className="signal-label">SMA CROSSOVER / V1</p>
+                    <h2>Run a reproducible test</h2>
+                    <label>
+                      Strategy context
+                      <select
+                        name="strategyId"
+                        defaultValue={selected?.id || ""}
+                        required
+                      >
+                        <option value="" disabled>
+                          Select a strategy
+                        </option>
+                        {trading.strategies.map((strategy) => (
+                          <option key={strategy.id} value={strategy.id}>
+                            {strategy.name} · {strategy.symbol}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="dataset-picker">
+                      <Upload size={20} />
+                      <span>
+                        Historical candles
+                        <small>
+                          CSV · timestamp, open, high, low, close, volume
+                        </small>
+                      </span>
+                      <input
+                        name="dataset"
+                        type="file"
+                        accept=".csv,text/csv"
+                        required
+                      />
+                    </label>
+                    <div className="backtest-fields">
+                      <label>
+                        Fast SMA
+                        <input
+                          name="fastWindow"
+                          type="number"
+                          min="2"
+                          max="500"
+                          defaultValue="20"
+                          required
+                        />
+                      </label>
+                      <label>
+                        Slow SMA
+                        <input
+                          name="slowWindow"
+                          type="number"
+                          min="3"
+                          max="1000"
+                          defaultValue="50"
+                          required
+                        />
+                      </label>
+                      <label>
+                        Fee (bps/side)
+                        <input
+                          name="feeBps"
+                          type="number"
+                          min="0"
+                          max="500"
+                          defaultValue="10"
+                          required
+                        />
+                      </label>
+                    </div>
+                    <button
+                      className="ghost-button full sample-download"
+                      type="button"
+                      onClick={downloadSampleCandles}
+                    >
+                      <Download size={15} />
+                      Download synthetic sample CSV
+                    </button>
+                    <button
+                      className="neon-button full"
+                      disabled={busy || !trading.strategies.length}
+                    >
+                      <BarChart3 size={16} />
+                      {busy ? "Calculating…" : "Run historical test"}
+                    </button>
+                    <p className="backtest-disclosure">
+                      Signals use closing data and execute at the next candle's
+                      open. Fees apply on entry and exit. No slippage, spread,
+                      liquidity or taxes are modeled.
+                    </p>
+                  </form>
+                  <section className="glass-panel backtest-result">
+                    <p className="signal-label">LATEST VERIFIED RUN</p>
+                    {latestBacktest ? (
+                      <>
+                        <div className="result-title">
+                          <div>
+                            <h2>{latestBacktest.symbol}</h2>
+                            <span>{latestBacktest.sourceName}</span>
+                          </div>
+                          <strong
+                            className={
+                              latestBacktest.netReturnPercent >= 0
+                                ? "positive"
+                                : "negative"
+                            }
+                          >
+                            {latestBacktest.netReturnPercent >= 0 ? "+" : ""}
+                            {latestBacktest.netReturnPercent.toFixed(2)}%
+                          </strong>
+                        </div>
+                        <div className="result-metrics">
+                          <ResultMetric
+                            label="Ending balance"
+                            value={moneyLabel(latestBacktest.endingBalance)}
+                          />
+                          <ResultMetric
+                            label="Max drawdown"
+                            value={`${latestBacktest.maxDrawdownPercent.toFixed(2)}%`}
+                          />
+                          <ResultMetric
+                            label="Win rate"
+                            value={`${latestBacktest.winRate.toFixed(1)}%`}
+                          />
+                          <ResultMetric
+                            label="Trades"
+                            value={String(latestBacktest.trades)}
+                          />
+                          <ResultMetric
+                            label="Profit factor"
+                            value={latestBacktest.profitFactor.toFixed(2)}
+                          />
+                          <ResultMetric
+                            label="Buy & hold"
+                            value={`${latestBacktest.buyHoldReturnPercent.toFixed(2)}%`}
+                          />
+                        </div>
+                        <div className="test-evidence">
+                          <span>
+                            {latestBacktest.bars.toLocaleString()} candles
+                          </span>
+                          <span>
+                            SMA {latestBacktest.fastWindow}/
+                            {latestBacktest.slowWindow}
+                          </span>
+                          <span>{latestBacktest.feeBps} bps/side</span>
+                          <span title={latestBacktest.sourceHash}>
+                            SHA-256 {latestBacktest.sourceHash.slice(0, 12)}…
+                          </span>
+                          <span>
+                            {new Date(latestBacktest.from).toLocaleDateString()}{" "}
+                            – {new Date(latestBacktest.to).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="blank-result">
+                        <BarChart3 size={42} />
+                        <h2>No historical evidence yet</h2>
+                        <p>
+                          Upload a chronological candle CSV to establish the
+                          first reproducible baseline.
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                </div>
+                {trading.backtests.length > 0 && (
+                  <section className="backtest-history">
+                    <div className="panel-head">
+                      <div>
+                        <p className="signal-label">EXPERIMENT HISTORY</p>
+                        <h2>Compare every run</h2>
+                      </div>
+                      <span>{trading.backtests.length} saved tests</span>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Market / data</th>
+                            <th>Parameters</th>
+                            <th>Net return</th>
+                            <th>Buy & hold</th>
+                            <th>Drawdown</th>
+                            <th>Trades</th>
+                            <th>Tested</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trading.backtests.map((result) => (
+                            <tr
+                              key={result.id}
+                              onClick={() => setLatestBacktestId(result.id)}
+                            >
+                              <td>
+                                <strong>{result.symbol}</strong>
+                                <small>{result.sourceName}</small>
+                              </td>
+                              <td>
+                                {result.fastWindow}/{result.slowWindow} ·{" "}
+                                {result.feeBps} bps
+                              </td>
+                              <td
+                                className={
+                                  result.netReturnPercent >= 0
+                                    ? "positive"
+                                    : "negative"
+                                }
+                              >
+                                {result.netReturnPercent.toFixed(2)}%
+                              </td>
+                              <td>{result.buyHoldReturnPercent.toFixed(2)}%</td>
+                              <td>{result.maxDrawdownPercent.toFixed(2)}%</td>
+                              <td>{result.trades}</td>
+                              <td>
+                                {new Date(result.testedAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                )}
               </>
             )}
             {view === "agents" && (
@@ -1215,6 +1575,14 @@ function Metric({
       <span>{label}</span>
       <strong className={tone}>{value}</strong>
       <small>{note}</small>
+    </div>
+  );
+}
+function ResultMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

@@ -176,6 +176,37 @@ export const agentEventSchema = z
   })
   .strict();
 
+export const backtestResultSchema = z
+  .object({
+    id: text,
+    strategyId: text,
+    symbol: z.string().trim().min(2).max(24),
+    sourceName: z.string().trim().min(1).max(180),
+    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+    algorithm: z.literal("sma-crossover-v1"),
+    fastWindow: z.number().int().min(2).max(500),
+    slowWindow: z.number().int().min(3).max(1000),
+    feeBps: z.number().int().min(0).max(500),
+    positionPercent: z.number().min(0.1).max(25),
+    bars: z.number().int().min(30).max(50000),
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+    startingBalance: z.number().finite().min(100).max(100000000),
+    endingBalance: z.number().finite().min(0).max(1000000000),
+    netReturnPercent: z.number().finite().min(-100).max(1000000),
+    buyHoldReturnPercent: z.number().finite().min(-100).max(1000000),
+    maxDrawdownPercent: z.number().finite().min(0).max(100),
+    winRate: z.number().finite().min(0).max(100),
+    trades: z.number().int().min(0).max(50000),
+    profitFactor: z.number().finite().min(0).max(1000000),
+    testedAt: z.string().datetime(),
+  })
+  .strict()
+  .refine((result) => result.fastWindow < result.slowWindow, {
+    message: "Fast window must be smaller than slow window",
+    path: ["fastWindow"],
+  });
+
 export const tradingSchema = z
   .object({
     mode: z.literal("paper"),
@@ -185,9 +216,42 @@ export const tradingSchema = z
     liveExecutionLocked: z.literal(true),
     strategies: z.array(strategySchema).max(250),
     paperTrades: z.array(paperTradeSchema).max(2000),
+    backtests: z.array(backtestResultSchema).max(1000).default([]),
     events: z.array(agentEventSchema).max(5000),
   })
-  .strict();
+  .strict()
+  .superRefine((trading, context) => {
+    const collections = [
+      ["strategies", trading.strategies],
+      ["paperTrades", trading.paperTrades],
+      ["backtests", trading.backtests],
+      ["events", trading.events],
+    ] as const;
+    for (const [name, records] of collections) {
+      const ids = records.map((record) => record.id);
+      if (new Set(ids).size !== ids.length)
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate ${name} identifiers`,
+          path: [name],
+        });
+    }
+    const strategyIds = new Set(
+      trading.strategies.map((strategy) => strategy.id),
+    );
+    if (trading.paperTrades.some((trade) => !strategyIds.has(trade.strategyId)))
+      context.addIssue({
+        code: "custom",
+        message: "A paper trade must reference an existing strategy",
+        path: ["paperTrades"],
+      });
+    if (trading.backtests.some((result) => !strategyIds.has(result.strategyId)))
+      context.addIssue({
+        code: "custom",
+        message: "A backtest must reference an existing strategy",
+        path: ["backtests"],
+      });
+  });
 
 export type TradingWorkspace = z.infer<typeof tradingSchema>;
 export const emptyTradingWorkspace = (): TradingWorkspace => ({
@@ -198,6 +262,7 @@ export const emptyTradingWorkspace = (): TradingWorkspace => ({
   liveExecutionLocked: true,
   strategies: [],
   paperTrades: [],
+  backtests: [],
   events: [],
 });
 
@@ -292,6 +357,15 @@ export type Receipt = z.infer<typeof receiptSchema>;
 export type Strategy = z.infer<typeof strategySchema>;
 export type PaperTrade = z.infer<typeof paperTradeSchema>;
 export type AgentEvent = z.infer<typeof agentEventSchema>;
+export type BacktestResult = z.infer<typeof backtestResultSchema>;
+export type Candle = {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
 export const emptyWorkspace = (): Workspace => ({
   businesses: [],
   products: [],
@@ -362,6 +436,197 @@ export function paperMetrics(trading: TradingWorkspace) {
       .reduce((total, trade) => total + trade.riskAmount, 0),
     winRate: closed.length ? (wins / closed.length) * 100 : 0,
     closedTrades: closed.length,
+  };
+}
+
+export function parseCandleCSV(input: string): Candle[] {
+  const lines = input
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim());
+  if (lines.length < 31)
+    throw Error("CSV needs a header and at least 30 candles");
+  if (lines.length > 50001) throw Error("CSV is limited to 50,000 candles");
+  const headers = lines[0]
+    .split(",")
+    .map((value) => value.trim().toLowerCase());
+  const required = ["timestamp", "open", "high", "low", "close"];
+  const indexes = Object.fromEntries(
+    required.map((name) => [name, headers.indexOf(name)]),
+  ) as Record<(typeof required)[number], number>;
+  if (required.some((name) => indexes[name] < 0))
+    throw Error(
+      "CSV headers must include timestamp, open, high, low and close",
+    );
+  const volumeIndex = headers.indexOf("volume");
+  const candles = lines.slice(1).map((line, row) => {
+    const cells = line.split(",").map((value) => value.trim());
+    const rawTimestamp = cells[indexes.timestamp];
+    const numericTimestamp = Number(rawTimestamp);
+    const time = /^\d{10,13}$/.test(rawTimestamp)
+      ? numericTimestamp * (rawTimestamp.length === 10 ? 1000 : 1)
+      : Date.parse(rawTimestamp);
+    const numberAt = (index: number) => Number(cells[index]);
+    if (!Number.isFinite(time))
+      throw Error(`Invalid candle on CSV row ${row + 2}`);
+    const candle: Candle = {
+      timestamp: new Date(time).toISOString(),
+      open: numberAt(indexes.open),
+      high: numberAt(indexes.high),
+      low: numberAt(indexes.low),
+      close: numberAt(indexes.close),
+      volume: volumeIndex >= 0 ? numberAt(volumeIndex) : 0,
+    };
+    if (
+      ![candle.open, candle.high, candle.low, candle.close].every(
+        (value) => Number.isFinite(value) && value > 0,
+      ) ||
+      !Number.isFinite(candle.volume) ||
+      candle.volume < 0 ||
+      candle.high < Math.max(candle.open, candle.close) ||
+      candle.low > Math.min(candle.open, candle.close) ||
+      candle.low > candle.high
+    )
+      throw Error(`Invalid candle on CSV row ${row + 2}`);
+    return candle;
+  });
+  for (let index = 1; index < candles.length; index += 1)
+    if (candles[index].timestamp <= candles[index - 1].timestamp)
+      throw Error("Candles must be in strictly increasing time order");
+  return candles;
+}
+
+export function runSMABacktest(
+  candles: Candle[],
+  options: {
+    startingBalance: number;
+    fastWindow: number;
+    slowWindow: number;
+    feeBps: number;
+    positionPercent: number;
+  },
+) {
+  const { startingBalance, fastWindow, slowWindow, feeBps, positionPercent } =
+    options;
+  if (candles.length < Math.max(30, slowWindow + 2))
+    throw Error("Not enough candles for the selected slow window");
+  if (!Number.isInteger(fastWindow) || !Number.isInteger(slowWindow))
+    throw Error("Moving-average windows must be whole numbers");
+  if (fastWindow < 2 || slowWindow <= fastWindow || slowWindow > 1000)
+    throw Error("Use windows where 2 ≤ fast < slow ≤ 1000");
+  if (feeBps < 0 || feeBps > 500)
+    throw Error("Fee must be between 0 and 500 basis points");
+  if (positionPercent <= 0 || positionPercent > 25)
+    throw Error("Position size must be between 0 and 25 percent");
+  if (startingBalance < 100)
+    throw Error("Starting balance must be at least 100");
+
+  const closes = candles.map((candle) => candle.close);
+  const average = (window: number) => {
+    const values = Array<number | undefined>(candles.length).fill(undefined);
+    let sum = 0;
+    for (let index = 0; index < closes.length; index += 1) {
+      sum += closes[index];
+      if (index >= window) sum -= closes[index - window];
+      if (index >= window - 1) values[index] = sum / window;
+    }
+    return values;
+  };
+  const fast = average(fastWindow);
+  const slow = average(slowWindow);
+  const feeRate = feeBps / 10000;
+  let balance = startingBalance;
+  let peak = startingBalance;
+  let maxDrawdownPercent = 0;
+  let position: { entry: number; quantity: number; entryFee: number } | null =
+    null;
+  let pending: "enter" | "exit" | null = null;
+  const returns: number[] = [];
+
+  for (let index = slowWindow; index < candles.length; index += 1) {
+    const candle = candles[index];
+    if (pending === "enter" && !position) {
+      const notional = balance * (positionPercent / 100);
+      position = {
+        entry: candle.open,
+        quantity: notional / candle.open,
+        entryFee: notional * feeRate,
+      };
+    } else if (pending === "exit" && position) {
+      const exitValue = candle.open * position.quantity;
+      const pnl =
+        (candle.open - position.entry) * position.quantity -
+        position.entryFee -
+        exitValue * feeRate;
+      balance += pnl;
+      returns.push(pnl);
+      position = null;
+    }
+    pending = null;
+
+    const markedEquity = position
+      ? balance +
+        (candle.close - position.entry) * position.quantity -
+        position.entryFee -
+        candle.close * position.quantity * feeRate
+      : balance;
+    peak = Math.max(peak, markedEquity);
+    maxDrawdownPercent = Math.max(
+      maxDrawdownPercent,
+      peak > 0 ? ((peak - markedEquity) / peak) * 100 : 0,
+    );
+    const previousFast = fast[index - 1];
+    const previousSlow = slow[index - 1];
+    const currentFast = fast[index];
+    const currentSlow = slow[index];
+    if (
+      !position &&
+      previousFast !== undefined &&
+      previousSlow !== undefined &&
+      currentFast !== undefined &&
+      currentSlow !== undefined &&
+      previousFast <= previousSlow &&
+      currentFast > currentSlow
+    )
+      pending = "enter";
+    else if (
+      position &&
+      previousFast !== undefined &&
+      previousSlow !== undefined &&
+      currentFast !== undefined &&
+      currentSlow !== undefined &&
+      previousFast >= previousSlow &&
+      currentFast < currentSlow
+    )
+      pending = "exit";
+  }
+  if (position) {
+    const last = candles.at(-1)!;
+    const exitValue = last.close * position.quantity;
+    const pnl =
+      (last.close - position.entry) * position.quantity -
+      position.entryFee -
+      exitValue * feeRate;
+    balance += pnl;
+    returns.push(pnl);
+  }
+  const wins = returns.filter((value) => value > 0);
+  const losses = returns.filter((value) => value < 0);
+  const grossProfit = wins.reduce((sum, value) => sum + value, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
+  return {
+    endingBalance: balance,
+    netReturnPercent: ((balance - startingBalance) / startingBalance) * 100,
+    buyHoldReturnPercent:
+      ((candles.at(-1)!.close - candles[0].open) / candles[0].open) * 100,
+    maxDrawdownPercent: Math.min(100, maxDrawdownPercent),
+    winRate: returns.length ? (wins.length / returns.length) * 100 : 0,
+    trades: returns.length,
+    profitFactor: grossLoss
+      ? grossProfit / grossLoss
+      : grossProfit
+        ? 1000000
+        : 0,
   };
 }
 export function metrics(w: Workspace, currency = w.settings.currency) {
