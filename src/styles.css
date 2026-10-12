@@ -603,14 +603,17 @@ textarea:focus-visible {
   margin-top: 6px;
 }
 .event-dot.approved,
-.event-dot.simulated {
+.event-dot.simulated,
+.event-dot.support {
   background: var(--green);
   box-shadow: 0 0 8px #65f5a677;
 }
-.event-dot.blocked {
+.event-dot.blocked,
+.event-dot.block {
   background: var(--red);
 }
-.event-dot.proposed {
+.event-dot.proposed,
+.event-dot.concern {
   background: var(--amber);
 }
 .event-dot.observed {
@@ -705,6 +708,184 @@ textarea:focus-visible {
 .agent-card {
   position: relative;
   min-height: 280px;
+}
+.native-ai-console {
+  display: grid;
+  grid-template-columns: 0.72fr 1.28fr;
+  border: 1px solid #a981ff66;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  background:
+    radial-gradient(circle at 12% 20%, #40207455, transparent 42%), #0d0f17;
+}
+.ai-control,
+.council-decision {
+  padding: 28px;
+}
+.ai-control {
+  border-right: 1px solid var(--line);
+}
+.native-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cyan);
+  border: 1px solid #5cf5e944;
+  background: #5cf5e909;
+  border-radius: 20px;
+  padding: 6px 9px;
+  font: 500 8px var(--mono);
+  letter-spacing: 0.1em;
+}
+.ai-control h2,
+.council-decision h2 {
+  font: 600 28px var(--display);
+  margin: 20px 0 7px;
+  text-transform: capitalize;
+}
+.ai-control > p,
+.council-decision > p {
+  color: var(--muted);
+}
+.ai-control label {
+  display: grid;
+  gap: 7px;
+  margin: 24px 0 12px;
+  color: var(--muted);
+  font: 500 9px var(--mono);
+}
+.ai-control select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #080a10;
+  color: var(--text);
+  border-radius: 7px;
+  padding: 12px;
+}
+.ai-control > small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 12px;
+}
+.decision-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+}
+.decision-head h2 {
+  margin: 5px 0 0;
+}
+.decision-head > strong {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #a981ff88;
+  color: var(--cyan);
+  font: 600 27px var(--display);
+  box-shadow: inset 0 0 22px #a981ff22;
+}
+.decision-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 20px 0;
+}
+.decision-metrics > div {
+  background: #0a0c13;
+  padding: 13px;
+}
+.decision-metrics span,
+.decision-metrics strong {
+  display: block;
+}
+.decision-metrics span {
+  color: var(--muted);
+  font: 500 7px var(--mono);
+  text-transform: uppercase;
+}
+.decision-metrics strong {
+  margin-top: 4px;
+  font: 600 18px var(--display);
+}
+.council-blockers {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #ff71853d;
+  background: #ff71850b;
+  border-radius: 8px;
+  padding: 12px;
+  color: #ff9eac;
+  font-size: 10px;
+}
+.council-blockers span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.decision-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.decision-footer > div {
+  display: flex;
+  gap: 8px;
+}
+.owner-decision {
+  font: 500 8px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--amber);
+}
+.owner-decision.accepted {
+  color: var(--green);
+}
+.owner-decision.rejected {
+  color: var(--red);
+}
+.blank-decision {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: var(--violet);
+}
+.blank-decision h2 {
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.blank-decision p {
+  color: var(--muted);
+  max-width: 430px;
+}
+.agent-score {
+  position: absolute;
+  top: 72px;
+  right: 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.agent-score strong {
+  font: 600 24px var(--display);
+  color: var(--cyan);
+}
+.agent-score span {
+  font: 500 8px var(--mono);
+  color: var(--muted);
 }
 .agent-number {
   position: absolute;
@@ -1360,6 +1541,20 @@ td small {
   }
   .backtest-layout {
     grid-template-columns: 1fr;
+  }
+  .native-ai-console {
+    grid-template-columns: 1fr;
+  }
+  .ai-control {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .decision-metrics {
+    grid-template-columns: 1fr;
+  }
+  .decision-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .result-metrics {
     grid-template-columns: 1fr 1fr;
