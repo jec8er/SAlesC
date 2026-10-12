@@ -1,6 +1,6 @@
 # ORBIT
 
-A standalone agentic market laboratory for jec8er. ORBIT coordinates research, strategy, risk, compliance, paper execution and audit in one private workspace. It runs directly from this GitHub repository with **React + Vite, Express and SQLite**. No Sites, Cloudflare, Vinext, ChatGPT authentication or third-party database account is required.
+A standalone agentic market laboratory for jec8er. ORBIT coordinates research, strategy, risk, compliance, paper execution and audit in one private workspace. Its native intelligence engine reasons from stored evidence without OpenAI, an external model API or a cloud inference dependency. It runs directly from this GitHub repository with **React + Vite, Express and SQLite**.
 
 ## Start locally (Windows, macOS or Linux)
 
@@ -22,6 +22,9 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
+- ORBIT Intelligence V1: a local, deterministic multi-agent council that independently scores evidence, strategy quality, risk, compliance, execution history and audit consistency.
+- Explainable recommendations with an overall score, evidence confidence, agent consensus, explicit blockers and evidence references.
+- Owner acceptance/rejection stored as adaptive memory; ORBIT incorporates prior decisions into later audit scores while preserving human authority.
 - Strategy creation with explicit thesis, confidence, entry, invalidation, target and bounded risk.
 - Independent policy gates requiring minimum confidence, reward-to-risk and loss-budget compliance.
 - Position sizing constrained by both risk-at-stop and maximum modeled notional.
@@ -35,7 +38,7 @@ The earlier commerce records remain schema-compatible so an existing SQLite work
 
 ### Safety boundary
 
-ORBIT is currently a decision-support and simulation product. Its scenario results are deterministic modeled outcomes. Historical backtests use user-supplied data and are not predictions, live prices or investment returns; the current engine does not model slippage, spread, liquidity or taxes. ORBIT does not provide investment advice, custody assets or execute trades.
+ORBIT is currently a decision-support and simulation product. Its native intelligence is an explainable scoring and policy engine, not a language model and not artificial general intelligence. Scenario results are deterministic modeled outcomes. Historical backtests use user-supplied data and are not predictions, live prices or investment returns; the current engine does not model slippage, spread, liquidity or taxes. ORBIT does not provide investment advice, custody assets or execute trades.
 
 ## Tests and CI
 

@@ -12,6 +12,7 @@ Ecomoda, trading, or Sites apps.
 4. Treat modeled P&L, live prices, backtest results, brokerage balances, and real returns as different facts.
 5. Never claim an order was sent, a market was observed live, a backtest was run, or money was earned unless the application stores appropriate evidence.
 6. Validate the subscription hypothesis in paper mode before adding paid data or broker integrations.
+7. ORBIT owns its intelligence layer. Do not add OpenAI, another hosted model provider, prompt-only agent theater or opaque external recommendations.
 
 ## Architecture and safety
 
@@ -23,6 +24,7 @@ Ecomoda, trading, or Sites apps.
 - Strategy sizing must remain constrained by risk-at-stop and maximum modeled notional.
 - Scenario results must be labeled as modeled data, never predictions or investment advice.
 - Backtests must avoid look-ahead execution, include fees, disclose omitted market frictions, validate chronological OHLCV input and store summaries rather than raw datasets.
+- Native council decisions must be deterministic, evidence-referenced, independently scored by all six agents and subject to explicit owner acceptance or rejection.
 - Keep external customer exports bounded, escaped, and free of internal costs or prospect data.
 - Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, payment processing, or brokerage dependencies without an explicit product decision.
 - ORBIT project memory remains curated and revision-safe; generated content is not technical validation.

@@ -207,6 +207,51 @@ export const backtestResultSchema = z
     path: ["fastWindow"],
   });
 
+export const councilRunSchema = z
+  .object({
+    id: text,
+    strategyId: text,
+    engineVersion: z.literal("orbit-intelligence-v1"),
+    recommendation: z.enum(["approve_paper", "revise", "observe", "reject"]),
+    score: z.number().int().min(0).max(100),
+    confidence: z.number().int().min(0).max(100),
+    consensus: z.number().int().min(0).max(100),
+    summary: z.string().trim().min(1).max(1000),
+    blockers: z.array(z.string().trim().min(1).max(240)).max(20),
+    agents: z
+      .array(
+        z
+          .object({
+            agent: z.enum([
+              "scout",
+              "strategist",
+              "risk",
+              "compliance",
+              "executor",
+              "auditor",
+            ]),
+            verdict: z.enum(["support", "concern", "block"]),
+            score: z.number().int().min(0).max(100),
+            rationale: z.string().trim().min(1).max(600),
+          })
+          .strict(),
+      )
+      .length(6),
+    evidence: z
+      .object({
+        backtestIds: z.array(text).max(50),
+        paperTradeIds: z.array(text).max(200),
+        totalBars: z.number().int().min(0).max(2500000),
+        totalTrades: z.number().int().min(0).max(2500000),
+        datasetFingerprints: z.number().int().min(0).max(50),
+        priorCouncilRuns: z.number().int().min(0).max(1000),
+      })
+      .strict(),
+    ownerDecision: z.enum(["pending", "accepted", "rejected"]),
+    generatedAt: z.string().datetime(),
+  })
+  .strict();
+
 export const tradingSchema = z
   .object({
     mode: z.literal("paper"),
@@ -217,6 +262,7 @@ export const tradingSchema = z
     strategies: z.array(strategySchema).max(250),
     paperTrades: z.array(paperTradeSchema).max(2000),
     backtests: z.array(backtestResultSchema).max(1000).default([]),
+    councilRuns: z.array(councilRunSchema).max(1000).default([]),
     events: z.array(agentEventSchema).max(5000),
   })
   .strict()
@@ -225,6 +271,7 @@ export const tradingSchema = z
       ["strategies", trading.strategies],
       ["paperTrades", trading.paperTrades],
       ["backtests", trading.backtests],
+      ["councilRuns", trading.councilRuns],
       ["events", trading.events],
     ] as const;
     for (const [name, records] of collections) {
@@ -251,6 +298,12 @@ export const tradingSchema = z
         message: "A backtest must reference an existing strategy",
         path: ["backtests"],
       });
+    if (trading.councilRuns.some((run) => !strategyIds.has(run.strategyId)))
+      context.addIssue({
+        code: "custom",
+        message: "A council run must reference an existing strategy",
+        path: ["councilRuns"],
+      });
   });
 
 export type TradingWorkspace = z.infer<typeof tradingSchema>;
@@ -263,6 +316,7 @@ export const emptyTradingWorkspace = (): TradingWorkspace => ({
   strategies: [],
   paperTrades: [],
   backtests: [],
+  councilRuns: [],
   events: [],
 });
 
@@ -358,6 +412,7 @@ export type Strategy = z.infer<typeof strategySchema>;
 export type PaperTrade = z.infer<typeof paperTradeSchema>;
 export type AgentEvent = z.infer<typeof agentEventSchema>;
 export type BacktestResult = z.infer<typeof backtestResultSchema>;
+export type CouncilRun = z.infer<typeof councilRunSchema>;
 export type Candle = {
   timestamp: string;
   open: number;
@@ -628,6 +683,227 @@ export function runSMABacktest(
         ? 1000000
         : 0,
   };
+}
+
+const boundedScore = (value: number) =>
+  Math.round(Math.max(0, Math.min(100, value)));
+
+export function runOrbitCouncil(
+  trading: TradingWorkspace,
+  strategy: Strategy,
+  identity: { id: string; generatedAt: string },
+): CouncilRun {
+  const backtests = trading.backtests
+    .filter((result) => result.strategyId === strategy.id)
+    .sort((left, right) => right.testedAt.localeCompare(left.testedAt))
+    .slice(0, 10);
+  const paperTrades = trading.paperTrades.filter(
+    (trade) => trade.strategyId === strategy.id && trade.status === "closed",
+  );
+  const priorRuns = trading.councilRuns.filter(
+    (run) => run.strategyId === strategy.id,
+  );
+  const average = (values: number[]) =>
+    values.length
+      ? values.reduce((total, value) => total + value, 0) / values.length
+      : 0;
+  const totalBars = backtests.reduce((total, result) => total + result.bars, 0);
+  const totalTrades = backtests.reduce(
+    (total, result) => total + result.trades,
+    0,
+  );
+  const averageReturn = average(
+    backtests.map((result) => result.netReturnPercent),
+  );
+  const averageBenchmark = average(
+    backtests.map((result) => result.buyHoldReturnPercent),
+  );
+  const averageDrawdown = average(
+    backtests.map((result) => result.maxDrawdownPercent),
+  );
+  const averageProfitFactor = average(
+    backtests.map((result) => Math.min(5, result.profitFactor)),
+  );
+  const positiveRuns = backtests.filter(
+    (result) => result.netReturnPercent > 0,
+  ).length;
+  const fingerprints = new Set(backtests.map((result) => result.sourceHash));
+  const parameterSets = new Set(
+    backtests.map(
+      (result) => `${result.fastWindow}/${result.slowWindow}/${result.feeBps}`,
+    ),
+  );
+  const acceptedMemory = priorRuns.filter(
+    (run) => run.ownerDecision === "accepted",
+  ).length;
+  const rejectedMemory = priorRuns.filter(
+    (run) => run.ownerDecision === "rejected",
+  ).length;
+  const paperPnl = paperTrades.reduce((total, trade) => total + trade.pnl, 0);
+
+  const scoutScore = boundedScore(
+    20 +
+      Math.min(35, totalBars / 200) +
+      Math.min(25, backtests.length * 8) +
+      Math.min(20, fingerprints.size * 8),
+  );
+  const strategistScore = boundedScore(
+    45 +
+      averageReturn * 1.2 +
+      (averageReturn - averageBenchmark) * 0.6 +
+      (averageProfitFactor - 1) * 12 +
+      Math.min(8, parameterSets.size * 2),
+  );
+  const riskScore = boundedScore(
+    96 - averageDrawdown * 2.1 - strategy.riskPercent * 4,
+  );
+  const complianceScore = boundedScore(
+    (backtests.length ? 50 : 10) +
+      Math.min(20, backtests.length * 8) +
+      Math.min(20, fingerprints.size * 10) +
+      (backtests.every((result) => result.feeBps > 0) ? 10 : 0),
+  );
+  const executorScore = boundedScore(
+    paperTrades.length
+      ? 50 + Math.min(30, paperPnl / 10) + Math.min(20, paperTrades.length * 3)
+      : 45,
+  );
+  const consistency = backtests.length
+    ? (positiveRuns / backtests.length) * 100
+    : 0;
+  const auditorScore = boundedScore(
+    20 +
+      consistency * 0.45 +
+      Math.min(20, parameterSets.size * 6) +
+      Math.min(10, acceptedMemory * 2) -
+      Math.min(20, rejectedMemory * 4),
+  );
+
+  const hardBlockers = [
+    !backtests.length ? "No historical backtest evidence is linked." : "",
+    totalTrades < 3 ? "Fewer than three historical trades were observed." : "",
+    backtests.some((result) => result.maxDrawdownPercent > 35)
+      ? "At least one backtest exceeded 35% drawdown."
+      : "",
+    strategy.riskPercent > trading.maxDailyLossPercent
+      ? "Strategy risk exceeds the owner's daily loss policy."
+      : "",
+  ].filter(Boolean);
+  const agents: CouncilRun["agents"] = [
+    {
+      agent: "scout",
+      verdict: !backtests.length
+        ? "block"
+        : scoutScore >= 60
+          ? "support"
+          : "concern",
+      score: scoutScore,
+      rationale: backtests.length
+        ? `${backtests.length} runs cover ${totalBars.toLocaleString()} candles across ${fingerprints.size} dataset fingerprint${fingerprints.size === 1 ? "" : "s"}.`
+        : "No historical dataset has been tested, so market evidence is absent.",
+    },
+    {
+      agent: "strategist",
+      verdict:
+        !backtests.length || strategistScore < 35
+          ? "block"
+          : strategistScore >= 60
+            ? "support"
+            : "concern",
+      score: strategistScore,
+      rationale: backtests.length
+        ? `Average return is ${averageReturn.toFixed(2)}% versus ${averageBenchmark.toFixed(2)}% buy-and-hold; average capped profit factor is ${averageProfitFactor.toFixed(2)}.`
+        : "The thesis has not produced measurable historical results.",
+    },
+    {
+      agent: "risk",
+      verdict:
+        averageDrawdown > 35 ||
+        strategy.riskPercent > trading.maxDailyLossPercent
+          ? "block"
+          : riskScore >= 60
+            ? "support"
+            : "concern",
+      score: riskScore,
+      rationale: `Average drawdown is ${averageDrawdown.toFixed(2)}%; requested risk is ${strategy.riskPercent.toFixed(1)}% against a ${trading.maxDailyLossPercent.toFixed(1)}% daily limit.`,
+    },
+    {
+      agent: "compliance",
+      verdict: !backtests.length
+        ? "block"
+        : complianceScore >= 65
+          ? "support"
+          : "concern",
+      score: complianceScore,
+      rationale: backtests.length
+        ? `${backtests.length} auditable summaries include dataset fingerprints; ${backtests.filter((result) => result.feeBps > 0).length} include non-zero fees.`
+        : "There is no auditable test record to review.",
+    },
+    {
+      agent: "executor",
+      verdict: executorScore >= 60 ? "support" : "concern",
+      score: executorScore,
+      rationale: paperTrades.length
+        ? `${paperTrades.length} closed paper scenarios produced ${moneyLabel(paperPnl)} modeled P&L.`
+        : "No closed paper scenario exists yet; execution confidence remains neutral.",
+    },
+    {
+      agent: "auditor",
+      verdict: auditorScore >= 60 ? "support" : "concern",
+      score: auditorScore,
+      rationale: `${positiveRuns}/${backtests.length} historical runs were positive across ${parameterSets.size} parameter set${parameterSets.size === 1 ? "" : "s"}; memory contains ${acceptedMemory} accepted and ${rejectedMemory} rejected prior decisions.`,
+    },
+  ];
+  const score = boundedScore(average(agents.map((agent) => agent.score)));
+  const dispersion = average(
+    agents.map((agent) => Math.abs(agent.score - score)),
+  );
+  const consensus = boundedScore(100 - dispersion * 1.8);
+  const confidence = boundedScore(
+    20 +
+      Math.min(25, backtests.length * 8) +
+      Math.min(25, totalTrades * 2) +
+      Math.min(20, totalBars / 500) +
+      Math.min(10, priorRuns.length * 2),
+  );
+  const recommendation: CouncilRun["recommendation"] = hardBlockers.length
+    ? backtests.length
+      ? "reject"
+      : "observe"
+    : score >= 70 && confidence >= 60 && consensus >= 65
+      ? "approve_paper"
+      : score >= 50
+        ? "revise"
+        : "reject";
+  const summary =
+    recommendation === "approve_paper"
+      ? `Evidence supports controlled paper testing at the owner's current limits. Score ${score}/100 with ${confidence}% evidence confidence.`
+      : recommendation === "revise"
+        ? `The strategy has partial support but needs stronger or more consistent evidence. Score ${score}/100 with ${confidence}% evidence confidence.`
+        : recommendation === "observe"
+          ? "ORBIT needs historical evidence before forming a strategy recommendation."
+          : `ORBIT does not support paper approval under the current evidence and limits. Score ${score}/100.`;
+  return councilRunSchema.parse({
+    ...identity,
+    strategyId: strategy.id,
+    engineVersion: "orbit-intelligence-v1",
+    recommendation,
+    score,
+    confidence,
+    consensus,
+    summary,
+    blockers: hardBlockers,
+    agents,
+    evidence: {
+      backtestIds: backtests.map((result) => result.id),
+      paperTradeIds: paperTrades.map((trade) => trade.id),
+      totalBars,
+      totalTrades,
+      datasetFingerprints: fingerprints.size,
+      priorCouncilRuns: priorRuns.length,
+    },
+    ownerDecision: "pending",
+  });
 }
 export function metrics(w: Workspace, currency = w.settings.currency) {
   const paid = w.receipts.filter(

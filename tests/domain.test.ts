@@ -16,6 +16,7 @@ import {
   paperMetrics,
   parseCandleCSV,
   runSMABacktest,
+  runOrbitCouncil,
   strategyRisk,
 } from "../lib/domain.ts";
 const receipt = {
@@ -213,6 +214,99 @@ test("backtest summaries cannot reference a missing strategy", () => {
       parsed.error.issues.map((issue) => issue.message).join(" "),
       /backtest must reference an existing strategy/,
     );
+});
+
+test("ORBIT native council refuses to invent evidence", () => {
+  const workspace = emptyWorkspace();
+  const strategy = {
+    id: "native-no-evidence",
+    name: "Unproven thesis",
+    symbol: "BTC/USDC",
+    timeframe: "4h" as const,
+    thesis: "A thesis awaiting historical evidence.",
+    status: "review" as const,
+    confidence: 70,
+    entry: 100,
+    stopLoss: 95,
+    takeProfit: 110,
+    riskPercent: 1,
+    createdAt: "2026-10-12T12:00:00.000Z",
+  };
+  workspace.trading!.strategies.push(strategy);
+  const council = runOrbitCouncil(workspace.trading!, strategy, {
+    id: "council-empty",
+    generatedAt: "2026-10-12T13:00:00.000Z",
+  });
+  assert.equal(council.recommendation, "observe");
+  assert.equal(council.agents.length, 6);
+  assert.ok(council.blockers.some((blocker) => /No historical/.test(blocker)));
+  assert.equal(council.ownerDecision, "pending");
+});
+
+test("ORBIT native council forms an explainable paper recommendation", () => {
+  const workspace = emptyWorkspace();
+  const strategy = {
+    id: "native-supported",
+    name: "Supported thesis",
+    symbol: "ETH/USDC",
+    timeframe: "4h" as const,
+    thesis: "A thesis tested across independent datasets and parameters.",
+    status: "review" as const,
+    confidence: 75,
+    entry: 100,
+    stopLoss: 95,
+    takeProfit: 110,
+    riskPercent: 1,
+    createdAt: "2026-10-12T12:00:00.000Z",
+  };
+  workspace.trading!.strategies.push(strategy);
+  workspace.trading!.backtests = [0, 1, 2].map((index) => ({
+    id: `bt-${index}`,
+    strategyId: strategy.id,
+    symbol: strategy.symbol,
+    sourceName: `dataset-${index}.csv`,
+    sourceHash: String(index + 1).repeat(64),
+    algorithm: "sma-crossover-v1" as const,
+    fastWindow: 10 + index * 5,
+    slowWindow: 40 + index * 10,
+    feeBps: 10,
+    positionPercent: 10,
+    bars: 1000,
+    from: "2026-01-01T00:00:00.000Z",
+    to: "2026-06-01T00:00:00.000Z",
+    startingBalance: 10000,
+    endingBalance: 11200,
+    netReturnPercent: 12,
+    buyHoldReturnPercent: 5,
+    maxDrawdownPercent: 5,
+    winRate: 60,
+    trades: 6,
+    profitFactor: 2,
+    testedAt: `2026-10-1${index + 1}T12:00:00.000Z`,
+  }));
+  const council = runOrbitCouncil(workspace.trading!, strategy, {
+    id: "council-supported",
+    generatedAt: "2026-10-12T13:00:00.000Z",
+  });
+  assert.equal(council.recommendation, "approve_paper");
+  assert.ok(council.score >= 70);
+  assert.ok(council.confidence >= 60);
+  assert.equal(council.blockers.length, 0);
+  assert.deepEqual(
+    council.agents.map((agent) => agent.agent),
+    ["scout", "strategist", "risk", "compliance", "executor", "auditor"],
+  );
+});
+
+test("older ORBIT workspaces gain empty council memory on parse", () => {
+  const workspace = emptyWorkspace();
+  const legacyTrading = { ...workspace.trading } as Record<string, unknown>;
+  delete legacyTrading.councilRuns;
+  const parsed = workspaceSchema.parse({
+    ...workspace,
+    trading: legacyTrading,
+  });
+  assert.deepEqual(parsed.trading?.councilRuns, []);
 });
 test("refunds, costs and fees reduce margin and currencies remain separate", () => {
   const w = emptyWorkspace();

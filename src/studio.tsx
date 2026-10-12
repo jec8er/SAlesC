@@ -32,6 +32,7 @@ import {
 import {
   type AgentEvent,
   type BacktestResult,
+  type CouncilRun,
   type Strategy,
   type TradingWorkspace,
   type Workspace,
@@ -41,6 +42,7 @@ import {
   paperMetrics,
   parseCandleCSV,
   runSMABacktest,
+  runOrbitCouncil,
   strategyRisk,
   tradingState,
   workspaceSchema,
@@ -113,6 +115,32 @@ function demoWorkspace(): Workspace {
   workspace.trading = {
     ...emptyTradingWorkspace(),
     strategies: [strategy],
+    backtests: [
+      {
+        id: "demo-backtest",
+        strategyId: strategy.id,
+        symbol: strategy.symbol,
+        sourceName: "illustrative-candles.csv",
+        sourceHash: "d".repeat(64),
+        algorithm: "sma-crossover-v1",
+        fastWindow: 20,
+        slowWindow: 50,
+        feeBps: 10,
+        positionPercent: 10,
+        bars: 720,
+        from: "2026-01-01T00:00:00.000Z",
+        to: "2026-01-30T23:00:00.000Z",
+        startingBalance: 10000,
+        endingBalance: 10840,
+        netReturnPercent: 8.4,
+        buyHoldReturnPercent: 5.2,
+        maxDrawdownPercent: 7.3,
+        winRate: 58.3,
+        trades: 12,
+        profitFactor: 1.6,
+        testedAt: timestamp(),
+      },
+    ],
     events: [
       agentEvent("auditor", "observed", "Demo environment initialized."),
       agentEvent(
@@ -186,6 +214,7 @@ export default function Studio({
   const [composer, setComposer] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [latestBacktestId, setLatestBacktestId] = useState("");
+  const [latestCouncilId, setLatestCouncilId] = useState("");
   const trading = tradingState(workspace);
   const metrics = paperMetrics(trading);
   const selected =
@@ -194,6 +223,12 @@ export default function Studio({
   const latestBacktest =
     trading.backtests.find((item) => item.id === latestBacktestId) ||
     trading.backtests[0];
+  const latestCouncil =
+    trading.councilRuns.find((item) => item.id === latestCouncilId) ||
+    trading.councilRuns.find((item) => item.strategyId === selected?.id) ||
+    trading.councilRuns[0];
+  const councilForSelected =
+    latestCouncil?.strategyId === selected?.id ? latestCouncil : undefined;
 
   async function load() {
     setError("");
@@ -517,6 +552,71 @@ export default function Studio({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function conveneCouncil(strategy: Strategy) {
+    setError("");
+    try {
+      const council = runOrbitCouncil(trading, strategy, {
+        id: crypto.randomUUID(),
+        generatedAt: timestamp(),
+      });
+      const status: AgentEvent["status"] =
+        council.recommendation === "approve_paper"
+          ? "approved"
+          : council.recommendation === "reject"
+            ? "blocked"
+            : "observed";
+      const saved = await persist(
+        {
+          ...trading,
+          councilRuns: [council, ...trading.councilRuns],
+          events: [
+            agentEvent(
+              "auditor",
+              status,
+              `Native council recommended ${council.recommendation.replace("_", " ")} with score ${council.score}/100.`,
+            ),
+            ...trading.events,
+          ],
+        },
+        "ORBIT council decision saved",
+      );
+      if (saved) setLatestCouncilId(council.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ORBIT council failed");
+    }
+  }
+
+  async function decideCouncil(
+    council: CouncilRun,
+    ownerDecision: CouncilRun["ownerDecision"],
+  ) {
+    const approveStrategy =
+      ownerDecision === "accepted" &&
+      council.recommendation === "approve_paper";
+    await persist(
+      {
+        ...trading,
+        strategies: trading.strategies.map((strategy) =>
+          approveStrategy && strategy.id === council.strategyId
+            ? { ...strategy, status: "approved" }
+            : strategy,
+        ),
+        councilRuns: trading.councilRuns.map((run) =>
+          run.id === council.id ? { ...run, ownerDecision } : run,
+        ),
+        events: [
+          agentEvent(
+            "auditor",
+            ownerDecision === "accepted" ? "approved" : "blocked",
+            `Owner ${ownerDecision} native council run ${council.id.slice(0, 8)}.`,
+          ),
+          ...trading.events,
+        ],
+      },
+      `Council recommendation ${ownerDecision}`,
+    );
   }
   const agentStates = useMemo(
     () =>
@@ -1130,14 +1230,138 @@ export default function Studio({
             {view === "agents" && (
               <>
                 <PageTitle
-                  kicker="SPECIALIZED INTELLIGENCE"
-                  title="Agent network"
-                  detail="Six bounded roles. Each agent can recommend; only policy gates authorize a paper action."
+                  kicker="ORBIT NATIVE INTELLIGENCE / V1"
+                  title="AI Council"
+                  detail="ORBIT analyzes its own stored evidence locally. Six specialized agents score the strategy independently, form a consensus and preserve your final decision as memory."
                 />
+                <section className="native-ai-console">
+                  <div className="ai-control">
+                    <span className="native-badge">
+                      <Atom size={15} /> NO EXTERNAL AI
+                    </span>
+                    <h2>Convene the council</h2>
+                    <p>
+                      Select a strategy. ORBIT will reason from its backtests,
+                      paper outcomes, risk policy and prior owner decisions.
+                    </p>
+                    <label>
+                      Strategy
+                      <select
+                        value={selected?.id || ""}
+                        onChange={(event) => setSelectedId(event.target.value)}
+                      >
+                        <option value="" disabled>
+                          Select a strategy
+                        </option>
+                        {trading.strategies.map((strategy) => (
+                          <option value={strategy.id} key={strategy.id}>
+                            {strategy.name} · {strategy.symbol}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="neon-button full"
+                      disabled={!selected || busy}
+                      onClick={() => selected && conveneCouncil(selected)}
+                    >
+                      <BrainCircuit size={16} />
+                      {busy ? "Reasoning…" : "Run ORBIT intelligence"}
+                    </button>
+                    <small>
+                      Deterministic and explainable. No prompt, model API or
+                      third-party inference is used.
+                    </small>
+                  </div>
+                  <div className="council-decision">
+                    {councilForSelected ? (
+                      <>
+                        <div className="decision-head">
+                          <div>
+                            <p className="signal-label">LATEST DECISION</p>
+                            <h2>
+                              {councilForSelected.recommendation.replaceAll(
+                                "_",
+                                " ",
+                              )}
+                            </h2>
+                          </div>
+                          <strong>{councilForSelected.score}</strong>
+                        </div>
+                        <p>{councilForSelected.summary}</p>
+                        <div className="decision-metrics">
+                          <ResultMetric
+                            label="Evidence confidence"
+                            value={`${councilForSelected.confidence}%`}
+                          />
+                          <ResultMetric
+                            label="Agent consensus"
+                            value={`${councilForSelected.consensus}%`}
+                          />
+                          <ResultMetric
+                            label="Prior memories"
+                            value={String(
+                              councilForSelected.evidence.priorCouncilRuns,
+                            )}
+                          />
+                        </div>
+                        {councilForSelected.blockers.length > 0 && (
+                          <div className="council-blockers">
+                            <strong>Blocking evidence</strong>
+                            {councilForSelected.blockers.map((blocker) => (
+                              <span key={blocker}>
+                                <TriangleAlert size={13} /> {blocker}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="decision-footer">
+                          <span
+                            className={`owner-decision ${councilForSelected.ownerDecision}`}
+                          >
+                            OWNER: {councilForSelected.ownerDecision}
+                          </span>
+                          {councilForSelected.ownerDecision === "pending" && (
+                            <div>
+                              <button
+                                className="ghost-button"
+                                onClick={() =>
+                                  decideCouncil(councilForSelected, "rejected")
+                                }
+                              >
+                                Reject
+                              </button>
+                              <button
+                                className="neon-button"
+                                onClick={() =>
+                                  decideCouncil(councilForSelected, "accepted")
+                                }
+                              >
+                                <Check size={15} /> Accept
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="blank-decision">
+                        <BrainCircuit size={48} />
+                        <h2>Intelligence is waiting</h2>
+                        <p>
+                          Run the council to create the first explainable,
+                          owner-controlled decision for this strategy.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
                 <div className="agent-grid">
                   {agents.map((agent, index) => {
                     const Icon = agent.icon,
-                      last = agentStates.get(agent.id);
+                      last = agentStates.get(agent.id),
+                      intelligence = councilForSelected?.agents.find(
+                        (item) => item.agent === agent.id,
+                      );
                     return (
                       <article className="agent-card" key={agent.id}>
                         <span className="agent-number">0{index + 1}</span>
@@ -1146,17 +1370,25 @@ export default function Studio({
                         </div>
                         <h2>{agent.name}</h2>
                         <p>{agent.purpose}</p>
+                        <div className="agent-score">
+                          <strong>{intelligence?.score ?? "—"}</strong>
+                          <span>/100</span>
+                        </div>
                         <div className="agent-state">
                           <span
-                            className={`event-dot ${last?.status || "idle"}`}
+                            className={`event-dot ${intelligence?.verdict || last?.status || "idle"}`}
                           />
                           <div>
-                            <small>LATEST STATE</small>
-                            <strong>{last?.status || "idle"}</strong>
+                            <small>INDEPENDENT VERDICT</small>
+                            <strong>
+                              {intelligence?.verdict || last?.status || "idle"}
+                            </strong>
                           </div>
                         </div>
                         <p className="agent-message">
-                          {last?.message || "Waiting for an auditable task."}
+                          {intelligence?.rationale ||
+                            last?.message ||
+                            "Waiting for an auditable task."}
                         </p>
                       </article>
                     );
