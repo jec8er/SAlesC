@@ -22,6 +22,7 @@ Ecomoda, trading, or Sites apps.
 - Live execution must remain hard-locked. Do not add wallets, exchange credentials, custody, or order routes without an explicit security and product decision.
 - Strategy sizing must remain constrained by risk-at-stop and maximum modeled notional.
 - Scenario results must be labeled as modeled data, never predictions or investment advice.
+- Backtests must avoid look-ahead execution, include fees, disclose omitted market frictions, validate chronological OHLCV input and store summaries rather than raw datasets.
 - Keep external customer exports bounded, escaped, and free of internal costs or prospect data.
 - Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, payment processing, or brokerage dependencies without an explicit product decision.
 - ORBIT project memory remains curated and revision-safe; generated content is not technical validation.

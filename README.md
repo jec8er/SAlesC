@@ -26,6 +26,8 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Independent policy gates requiring minimum confidence, reward-to-risk and loss-budget compliance.
 - Position sizing constrained by both risk-at-stop and maximum modeled notional.
 - A paper-only scenario engine and auditable ledger with realized/unrealized P&L, open risk and JSON export.
+- Browser-side historical backtesting from chronological OHLCV CSV files, with next-bar execution, configurable SMA windows and per-side fees.
+- Comparable backtest evidence: net return, buy-and-hold return, maximum drawdown, win rate, trade count and profit factor. Only summaries and a SHA-256 dataset fingerprint are stored; raw datasets remain local.
 - Owner-controlled portfolio limits. Live execution is hard-locked; no exchange keys, wallets or live order routes are present.
 - An explicit subscription hypothesis with Observer, Operator and Desk tiers for commercial validation.
 
@@ -33,7 +35,7 @@ The earlier commerce records remain schema-compatible so an existing SQLite work
 
 ### Safety boundary
 
-ORBIT is currently a decision-support and simulation product. Its scenario results are deterministic modeled outcomes, not backtests, predictions, live prices or investment returns. It does not provide investment advice, custody assets or execute trades.
+ORBIT is currently a decision-support and simulation product. Its scenario results are deterministic modeled outcomes. Historical backtests use user-supplied data and are not predictions, live prices or investment returns; the current engine does not model slippage, spread, liquidity or taxes. ORBIT does not provide investment advice, custody assets or execute trades.
 
 ## Tests and CI
 
