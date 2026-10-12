@@ -12,6 +12,9 @@ import {
   outreachPack,
   orbitReadiness,
   orbitHandoff,
+  emptyTradingWorkspace,
+  paperMetrics,
+  strategyRisk,
 } from "../lib/domain.ts";
 const receipt = {
   id: "r",
@@ -44,6 +47,69 @@ test("pending revenue and won deals never inflate collected revenue", () => {
   assert.equal(metrics(w).collected, 0);
   assert.equal(metrics(w).pending, 199);
   assert.equal(metrics(w).pipeline, 0);
+});
+
+test("ORBIT sizes a paper position by the strictest risk guardrail", () => {
+  const strategy = {
+    id: "s1",
+    name: "Bounded momentum",
+    symbol: "BTC/USDC",
+    timeframe: "4h" as const,
+    thesis: "A falsifiable paper-only scenario.",
+    status: "approved" as const,
+    confidence: 75,
+    entry: 100,
+    stopLoss: 90,
+    takeProfit: 120,
+    riskPercent: 2,
+    createdAt: "2026-10-12T12:00:00.000Z",
+  };
+  const sizing = strategyRisk(strategy, 10000, 10);
+  assert.equal(sizing.quantity, 10);
+  assert.equal(sizing.notional, 1000);
+  assert.equal(sizing.riskAmount, 100);
+  assert.equal(sizing.rewardToRisk, 2);
+});
+
+test("paper metrics separate modeled equity, risk and win rate", () => {
+  const trading = emptyTradingWorkspace();
+  trading.paperTrades = [
+    {
+      id: "closed-win",
+      strategyId: "s1",
+      symbol: "ETH/USDC",
+      side: "long",
+      status: "closed",
+      entry: 100,
+      mark: 110,
+      quantity: 10,
+      riskAmount: 50,
+      pnl: 100,
+      openedAt: "2026-10-12T12:00:00.000Z",
+      closedAt: "2026-10-12T13:00:00.000Z",
+    },
+    {
+      id: "open-loss",
+      strategyId: "s2",
+      symbol: "BTC/USDC",
+      side: "long",
+      status: "open",
+      entry: 100,
+      mark: 95,
+      quantity: 10,
+      riskAmount: 80,
+      pnl: -50,
+      openedAt: "2026-10-12T14:00:00.000Z",
+    },
+  ];
+  assert.deepEqual(paperMetrics(trading), {
+    equity: 10050,
+    realizedPnl: 100,
+    unrealizedPnl: -50,
+    openRisk: 80,
+    winRate: 100,
+    closedTrades: 1,
+  });
 });
 test("refunds, costs and fees reduce margin and currencies remain separate", () => {
   const w = emptyWorkspace();

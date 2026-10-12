@@ -1,6 +1,6 @@
 # ORBIT
 
-A standalone commerce, content and revenue workspace for jec8er. Runs directly from this GitHub repository with **React + Vite, Express and SQLite**. No Sites, Cloudflare, Vinext, ChatGPT authentication or third-party database account is required.
+A standalone agentic market laboratory for jec8er. ORBIT coordinates research, strategy, risk, compliance, paper execution and audit in one private workspace. It runs directly from this GitHub repository with **React + Vite, Express and SQLite**. No Sites, Cloudflare, Vinext, ChatGPT authentication or third-party database account is required.
 
 ## Start locally (Windows, macOS or Linux)
 
@@ -21,16 +21,19 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 
 - Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
-- Business/product management and standalone customer catalog exports with a responsive cart, real prices and one complete WhatsApp request to the business number.
-- Bilingual launch-script templates and local microphone recording/downloads.
-- A Close Desk that prioritizes overdue opportunities, exposes missing sales information, prepares reviewable follow-up messages and exports a three-touch sequence.
-- Opportunity tracking with lead source, priority, objections, contact dates and downloadable branded proposals with optional WhatsApp and HTTPS deposit actions.
-- One connected ORBIT delivery flow: link a deal to its business, check fulfillment readiness, persist the production queue and export a fact-bounded handoff without copying records into another product.
-- Won opportunities can create a linked deposit due in one step; ORBIT delivery stays gated until a paid record with a payment reference is linked to the opportunity.
-- Manual revenue ledger separating proposals, pending payments and documented collections. Costs, fees and refunds reduce contribution margin. USD/COP totals never mix.
-- Validated JSON backups and a separate illustrative demo that does not write real records.
+- A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
+- Strategy creation with explicit thesis, confidence, entry, invalidation, target and bounded risk.
+- Independent policy gates requiring minimum confidence, reward-to-risk and loss-budget compliance.
+- Position sizing constrained by both risk-at-stop and maximum modeled notional.
+- A paper-only scenario engine and auditable ledger with realized/unrealized P&L, open risk and JSON export.
+- Owner-controlled portfolio limits. Live execution is hard-locked; no exchange keys, wallets or live order routes are present.
+- An explicit subscription hypothesis with Observer, Operator and Desk tiers for commercial validation.
 
-Customer catalogs contain approved public product facts only, not cost data or prospect records. Requests are not automatically paid, fulfilled or confirmed orders. Scripts and recordings stay in the browser tab until downloaded.
+The earlier commerce records remain schema-compatible so an existing SQLite workspace can upgrade without destructive migration. Their legacy domain utilities remain tested, but the product interface is now exclusively ORBIT.
+
+### Safety boundary
+
+ORBIT is currently a decision-support and simulation product. Its scenario results are deterministic modeled outcomes, not backtests, predictions, live prices or investment returns. It does not provide investment advice, custody assets or execute trades.
 
 ## Tests and CI
 
@@ -51,18 +54,18 @@ For deployment on a server you control:
 - Configure `OWNER_PASSWORD_HASH` with `npm run password:hash`; never commit the password or hash.
 - Set `NODE_ENV=production` and `PUBLIC_ORIGIN` to the exact HTTPS origin, with no trailing slash.
 - Terminate HTTPS at your reverse proxy. Set `HOST=0.0.0.0` only where needed, with network access restricted to your proxy.
-- Keep `DATABASE_PATH` on a persistent volume and maintain backups. Use one application replica per SQLite database. JSON backup exports are available from Settings.
+- Keep `DATABASE_PATH` on a persistent volume and maintain backups. Use one application replica per SQLite database. Paper-trade and agent-event audit exports are available from the ledger.
 - The Dockerfile builds the frontend and runs the backend as the non-root `node` user. Mount a writable `/app/data` volume and provide secrets through the environment.
 
 ## Revenue approach
 
-The offer to test is a defined catalog/content setup service: proposed USD 199 setup and USD 39/month for agreed updates. These remain unvalidated hypotheses, not paid customers, subscriptions or predicted revenue. The Close Desk and ORBIT now form one path from prospect to verified deposit and controlled delivery; neither sends outreach or publishes automatically. A configured deposit URL is only a link to an external processor and never marks a payment as collected. A real sale requires a buyer, agreed scope, fulfilled delivery and a documented collection.
+The first offer to validate is **ORBIT Operator at USD 99/month**: unlimited strategy hypotheses, the full bounded agent workflow, owner-defined risk controls, audit exports and alerts. Observer (USD 29/month) can serve self-directed users; Desk (USD 299/month) is the team workflow. These prices are hypotheses, not current revenue. The product should prove retention and willingness to pay in paper mode before adding paid data feeds or any broker integration.
 
 ## Project structure
 
 - `src/`: React workspace and independent sign-in screen.
 - `server/`: Express API, sessions, password hashing and SQLite persistence.
-- `lib/domain.ts`: validation, contribution calculations and customer exports.
+- `lib/domain.ts`: validation, risk sizing, paper performance calculations and preserved customer exports.
 - `tests/`: domain and HTTP/database integration tests.
 - `legacy/`: unchanged original prototype sources, preserved for history.
 

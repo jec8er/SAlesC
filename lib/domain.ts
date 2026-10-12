@@ -99,12 +99,115 @@ export const receiptSchema = z
         path: ["refund"],
       });
   });
+
+export const strategySchema = z
+  .object({
+    id: text,
+    name: text,
+    symbol: z
+      .string()
+      .trim()
+      .min(2)
+      .max(24)
+      .regex(/^[A-Z0-9/_-]+$/),
+    timeframe: z.enum(["15m", "1h", "4h", "1d"]),
+    thesis: z.string().trim().min(1).max(1200),
+    status: z.enum(["draft", "review", "approved", "paused"]),
+    confidence: z.number().int().min(0).max(100),
+    entry: money,
+    stopLoss: money,
+    takeProfit: money,
+    riskPercent: z.number().min(0.1).max(5),
+    createdAt: z.string().datetime(),
+  })
+  .strict()
+  .superRefine((strategy, context) => {
+    if (strategy.stopLoss >= strategy.entry)
+      context.addIssue({
+        code: "custom",
+        message: "Stop loss must be below entry for long strategies",
+        path: ["stopLoss"],
+      });
+    if (strategy.takeProfit <= strategy.entry)
+      context.addIssue({
+        code: "custom",
+        message: "Take profit must be above entry for long strategies",
+        path: ["takeProfit"],
+      });
+  });
+
+export const paperTradeSchema = z
+  .object({
+    id: text,
+    strategyId: text,
+    symbol: z.string().trim().min(2).max(24),
+    side: z.literal("long"),
+    status: z.enum(["open", "closed"]),
+    entry: money,
+    mark: money,
+    quantity: z.number().finite().positive().max(100000000),
+    riskAmount: money,
+    pnl: z.number().finite().min(-100000000).max(100000000),
+    openedAt: z.string().datetime(),
+    closedAt: z.string().datetime().optional(),
+  })
+  .strict();
+
+export const agentEventSchema = z
+  .object({
+    id: text,
+    agent: z.enum([
+      "scout",
+      "strategist",
+      "risk",
+      "compliance",
+      "executor",
+      "auditor",
+    ]),
+    status: z.enum([
+      "observed",
+      "proposed",
+      "approved",
+      "blocked",
+      "simulated",
+    ]),
+    message: z.string().trim().min(1).max(600),
+    timestamp: z.string().datetime(),
+  })
+  .strict();
+
+export const tradingSchema = z
+  .object({
+    mode: z.literal("paper"),
+    startingBalance: z.number().finite().min(100).max(100000000),
+    maxDailyLossPercent: z.number().min(0.1).max(10),
+    maxPositionPercent: z.number().min(0.1).max(25),
+    liveExecutionLocked: z.literal(true),
+    strategies: z.array(strategySchema).max(250),
+    paperTrades: z.array(paperTradeSchema).max(2000),
+    events: z.array(agentEventSchema).max(5000),
+  })
+  .strict();
+
+export type TradingWorkspace = z.infer<typeof tradingSchema>;
+export const emptyTradingWorkspace = (): TradingWorkspace => ({
+  mode: "paper",
+  startingBalance: 10000,
+  maxDailyLossPercent: 2,
+  maxPositionPercent: 10,
+  liveExecutionLocked: true,
+  strategies: [],
+  paperTrades: [],
+  events: [],
+});
+
 export const workspaceSchema = z
   .object({
     businesses: z.array(businessSchema).max(100),
     products: z.array(productSchema).max(1000),
     deals: z.array(dealSchema).max(1000),
     receipts: z.array(receiptSchema).max(1000),
+    trading: tradingSchema.optional(),
     settings: z
       .object({
         setupPrice: money,
@@ -186,11 +289,15 @@ export type Business = z.infer<typeof businessSchema>;
 export type Product = z.infer<typeof productSchema>;
 export type Deal = z.infer<typeof dealSchema>;
 export type Receipt = z.infer<typeof receiptSchema>;
+export type Strategy = z.infer<typeof strategySchema>;
+export type PaperTrade = z.infer<typeof paperTradeSchema>;
+export type AgentEvent = z.infer<typeof agentEventSchema>;
 export const emptyWorkspace = (): Workspace => ({
   businesses: [],
   products: [],
   deals: [],
   receipts: [],
+  trading: emptyTradingWorkspace(),
   settings: {
     setupPrice: 199,
     monthlyPrice: 39,
@@ -206,6 +313,57 @@ export const emptyWorkspace = (): Workspace => ({
     depositPercent: 50,
   },
 });
+
+export function tradingState(workspace: Workspace): TradingWorkspace {
+  return workspace.trading || emptyTradingWorkspace();
+}
+
+export function strategyRisk(
+  strategy: Strategy,
+  balance: number,
+  maxPositionPercent: number,
+) {
+  const distance = strategy.entry - strategy.stopLoss;
+  const requestedRisk = balance * (strategy.riskPercent / 100);
+  const quantityByRisk = distance > 0 ? requestedRisk / distance : 0;
+  const maxNotional = balance * (maxPositionPercent / 100);
+  const quantityByPosition =
+    strategy.entry > 0 ? maxNotional / strategy.entry : 0;
+  const quantity = Math.max(0, Math.min(quantityByRisk, quantityByPosition));
+  const notional = quantity * strategy.entry;
+  const riskAmount = quantity * distance;
+  const rewardAmount = quantity * (strategy.takeProfit - strategy.entry);
+  return {
+    quantity,
+    notional,
+    riskAmount,
+    rewardAmount,
+    rewardToRisk: riskAmount > 0 ? rewardAmount / riskAmount : 0,
+  };
+}
+
+export function paperMetrics(trading: TradingWorkspace) {
+  const realizedPnl = trading.paperTrades
+    .filter((trade) => trade.status === "closed")
+    .reduce((total, trade) => total + trade.pnl, 0);
+  const unrealizedPnl = trading.paperTrades
+    .filter((trade) => trade.status === "open")
+    .reduce((total, trade) => total + trade.pnl, 0);
+  const closed = trading.paperTrades.filter(
+    (trade) => trade.status === "closed",
+  );
+  const wins = closed.filter((trade) => trade.pnl > 0).length;
+  return {
+    equity: trading.startingBalance + realizedPnl + unrealizedPnl,
+    realizedPnl,
+    unrealizedPnl,
+    openRisk: trading.paperTrades
+      .filter((trade) => trade.status === "open")
+      .reduce((total, trade) => total + trade.riskAmount, 0),
+    winRate: closed.length ? (wins / closed.length) * 100 : 0,
+    closedTrades: closed.length,
+  };
+}
 export function metrics(w: Workspace, currency = w.settings.currency) {
   const paid = w.receipts.filter(
     (r) => r.status !== "pending" && r.currency === currency,

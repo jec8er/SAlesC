@@ -63,7 +63,7 @@ export default function App() {
   if (auth)
     return (
       <Suspense
-        fallback={<div className="app-loading">Opening your workspace…</div>}
+        fallback={<div className="app-loading">Initializing ORBIT…</div>}
       >
         <Studio displayName={auth.name} csrf={auth.csrf} onLogout={logout} />
         {error && (
@@ -76,26 +76,26 @@ export default function App() {
   return (
     <div className="login-shell">
       <section className="login-art">
-        <p className="eyebrow light">ORBIT / JEC8ER</p>
+        <p className="eyebrow light">ORBIT / AGENTIC MARKET LAB</p>
         <h1>
-          Good craft.
+          Autonomous insight.
           <br />
-          <em>Better business.</em>
+          <em>Human authority.</em>
         </h1>
         <p>
-          Your commerce, your content, your numbers.
+          Research, strategy, risk and simulation.
           <br />
-          One independent workspace.
+          One auditable operating system.
         </p>
         <span className="login-monogram">O•</span>
-        <small>Built from your GitHub project.</small>
+        <small>PAPER MODE · LIVE EXECUTION LOCKED</small>
       </section>
       <section className="login-form">
         <div>
           <ShieldCheck size={30} />
-          <p className="eyebrow">PRIVATE OWNER ACCESS</p>
-          <h2>Welcome to ORBIT.</h2>
-          <p>Sign in with the owner password configured on your server.</p>
+          <p className="eyebrow">SECURE CONTROL PLANE</p>
+          <h2>Enter ORBIT.</h2>
+          <p>Authenticate to access your private agent network.</p>
           {!ready ? (
             <p>Checking your session…</p>
           ) : (
@@ -112,7 +112,7 @@ export default function App() {
                 autoFocus
               />
               <button disabled={busy} className="btn primary full">
-                {busy ? "Signing in…" : "Open workspace"}
+                {busy ? "Authenticating…" : "Open command center"}
                 <ArrowRight size={16} />
               </button>
             </form>
@@ -123,7 +123,7 @@ export default function App() {
             </p>
           )}
           <p className="fineprint">
-            Your records stay in your private workspace.
+            No wallet or exchange connection is enabled.
           </p>
         </div>
       </section>
