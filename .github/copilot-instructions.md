@@ -28,6 +28,8 @@ Ecomoda, trading, or Sites apps.
 - Keep external customer exports bounded, escaped, and free of internal costs or prospect data.
 - Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, payment processing, or brokerage dependencies without an explicit product decision.
 - ORBIT project memory remains curated and revision-safe; generated content is not technical validation.
+- Treat Trust Center statuses as evidence labels, not certifications. Never claim legal compliance, lawsuit prevention, accessibility conformance or regulatory approval from a checklist alone.
+- Keep public launch blocked while a Trust Center item requires owner action or professional review. Do not invent legal policies, business details, consent records or audit results.
 - Do not edit `legacy/` unless a task explicitly targets historical files.
 
 ## Change discipline

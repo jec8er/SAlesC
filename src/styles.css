@@ -27,6 +27,20 @@ body {
   color: var(--text);
   font: 14px/1.55 var(--sans);
 }
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -80px;
+  z-index: 100;
+  border-radius: 8px;
+  background: var(--cyan);
+  color: #04110f;
+  padding: 10px 14px;
+  font-weight: 800;
+}
+.skip-link:focus {
+  top: 16px;
+}
 button,
 input,
 select,
@@ -1452,6 +1466,92 @@ td small {
 .auth-error {
   color: var(--red) !important;
 }
+.trust-metrics {
+  margin-bottom: 20px;
+}
+.trust-console {
+  padding: 26px;
+}
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+.trust-control {
+  position: relative;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #090b12;
+  padding: 18px;
+}
+.trust-control > small {
+  display: block;
+  color: var(--violet);
+  font: 500 9px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 3px 0 13px;
+}
+.trust-control h3 {
+  max-width: 72%;
+  font-size: 14px;
+  margin: 0 0 9px;
+}
+.trust-control p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+.trust-state {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: var(--muted);
+  font: 600 8px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.trust-state.verified {
+  border-color: #65f5a64a;
+  background: #65f5a60b;
+  color: var(--green);
+}
+.trust-state.owner_action {
+  border-color: #ffd0744a;
+  background: #ffd0740b;
+  color: var(--amber);
+}
+.trust-state.professional_review {
+  border-color: #ff71854a;
+  background: #ff71850b;
+  color: #ff9aaa;
+}
+.trust-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+.trust-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--amber);
+}
+.trust-footer p {
+  max-width: 680px;
+  color: var(--muted);
+  margin: 0;
+  font-size: 11px;
+}
 @media (max-width: 1050px) {
   .orbit-sidebar {
     width: 200px;
@@ -1471,6 +1571,9 @@ td small {
     display: none;
   }
   .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .trust-grid {
     grid-template-columns: 1fr;
   }
   .metric-strip {
@@ -1597,6 +1700,10 @@ td small {
   }
   .ledger-head button {
     margin-left: 0;
+  }
+  .trust-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 @media (prefers-reduced-motion: reduce) {

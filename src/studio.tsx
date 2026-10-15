@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  Accessibility,
   Atom,
   BarChart3,
   Bot,
@@ -20,6 +21,7 @@ import {
   Plus,
   Radar,
   RefreshCw,
+  Scale,
   ShieldCheck,
   Sparkles,
   Target,
@@ -29,6 +31,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { trustControls, trustSummary } from "../lib/trust";
 import {
   type AgentEvent,
   type BacktestResult,
@@ -55,6 +58,7 @@ const nav = [
   ["agents", "Agent network", Bot],
   ["risk", "Risk control", ShieldCheck],
   ["ledger", "Paper ledger", WalletCards],
+  ["trust", "Trust center", Scale],
   ["plans", "Plans", CircleDollarSign],
 ] as const;
 type View = (typeof nav)[number][0];
@@ -628,11 +632,19 @@ export default function Studio({
       ),
     [trading.events],
   );
+  const trust = trustSummary();
 
   return (
     <div className="orbit-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <aside className="orbit-sidebar">
-        <button className="orbit-brand" onClick={() => setView("command")}>
+        <button
+          className="orbit-brand"
+          onClick={() => setView("command")}
+          aria-label="Open ORBIT command center"
+        >
           <span className="orbit-logo">
             <Atom size={24} />
           </span>
@@ -641,12 +653,13 @@ export default function Studio({
           </span>
         </button>
         <p className="nav-kicker">OPERATIONS</p>
-        <nav>
+        <nav aria-label="ORBIT operations">
           {nav.map(([id, label, Icon]) => (
             <button
               key={id}
               className={view === id ? "active" : ""}
               onClick={() => setView(id)}
+              aria-current={view === id ? "page" : undefined}
             >
               <Icon size={17} />
               {label}
@@ -672,7 +685,7 @@ export default function Studio({
           </button>
         </div>
       </aside>
-      <main className="orbit-main">
+      <main className="orbit-main" id="main-content" tabIndex={-1}>
         <header className="orbit-header">
           <div>
             <span className="pulse" /> SYSTEM ONLINE <b>/</b>{" "}
@@ -707,7 +720,7 @@ export default function Studio({
           <div className="error-banner">
             <TriangleAlert size={16} />
             {error}
-            <button onClick={() => setError("")}>
+            <button onClick={() => setError("")} aria-label="Dismiss error">
               <X size={15} />
             </button>
           </div>
@@ -1574,6 +1587,86 @@ export default function Studio({
                 </section>
               </>
             )}
+            {view === "trust" && (
+              <>
+                <PageTitle
+                  kicker="PRIVACY · ACCESSIBILITY · SECURITY"
+                  title="Trust center"
+                  detail="A conservative launch gate based on repository evidence. Verified means a control exists in code—not that a lawyer or auditor has certified ORBIT."
+                />
+                <div className="metric-strip trust-metrics">
+                  <Metric
+                    label="Verified in code"
+                    value={`${trust.verified}/${trust.total}`}
+                    note="repository evidence"
+                    tone="positive"
+                  />
+                  <Metric
+                    label="Owner actions"
+                    value={String(trust.ownerAction)}
+                    note="must be completed"
+                    tone={trust.ownerAction ? "negative" : "positive"}
+                  />
+                  <Metric
+                    label="Professional review"
+                    value={String(trust.professionalReview)}
+                    note="legal or accessibility"
+                    tone={trust.professionalReview ? "negative" : "positive"}
+                  />
+                  <Metric
+                    label="Public launch"
+                    value={trust.launchReady ? "READY" : "BLOCKED"}
+                    note="payments remain disabled"
+                    tone={trust.launchReady ? "positive" : "negative"}
+                  />
+                </div>
+                <section className="glass-panel trust-console">
+                  <div className="panel-head">
+                    <div>
+                      <p className="signal-label">20-CONTROL LAUNCH GATE</p>
+                      <h2>Evidence before claims</h2>
+                    </div>
+                    <Accessibility size={20} />
+                  </div>
+                  <div className="trust-grid">
+                    {trustControls.map((control, index) => (
+                      <article className="trust-control" key={control.id}>
+                        <span className={`trust-state ${control.status}`}>
+                          {control.status === "verified"
+                            ? "verified"
+                            : control.status === "owner_action"
+                              ? "owner action"
+                              : "professional review"}
+                        </span>
+                        <small>
+                          {String(index + 1).padStart(2, "0")} ·{" "}
+                          {control.category}
+                        </small>
+                        <h3>{control.title}</h3>
+                        <p>{control.evidence}</p>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="trust-footer">
+                    <div>
+                      <ShieldCheck size={18} />
+                      <p>
+                        This is operational readiness, not legal advice or a
+                        guarantee against complaints, investigations or claims.
+                      </p>
+                    </div>
+                    <button
+                      className="ghost-button"
+                      onClick={() =>
+                        downloadJSON(workspace, "orbit-workspace-export.json")
+                      }
+                    >
+                      <Download size={15} /> Export my workspace
+                    </button>
+                  </div>
+                </section>
+              </>
+            )}
             {view === "plans" && (
               <>
                 <PageTitle
@@ -1639,6 +1732,9 @@ export default function Studio({
         >
           <form
             className="strategy-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="strategy-dialog-title"
             onSubmit={(e) => {
               e.preventDefault();
               createStrategy(e.currentTarget);
@@ -1647,12 +1743,13 @@ export default function Studio({
             <div className="panel-head">
               <div>
                 <p className="signal-label">NEW HYPOTHESIS</p>
-                <h2>Design a strategy</h2>
+                <h2 id="strategy-dialog-title">Design a strategy</h2>
               </div>
               <button
                 type="button"
                 className="icon-button"
                 onClick={() => setComposer(false)}
+                aria-label="Close strategy dialog"
               >
                 <X />
               </button>

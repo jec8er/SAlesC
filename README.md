@@ -32,6 +32,8 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Browser-side historical backtesting from chronological OHLCV CSV files, with next-bar execution, configurable SMA windows and per-side fees.
 - Comparable backtest evidence: net return, buy-and-hold return, maximum drawdown, win rate, trade count and profit factor. Only summaries and a SHA-256 dataset fingerprint are stored; raw datasets remain local.
 - Owner-controlled portfolio limits. Live execution is hard-locked; no exchange keys, wallets or live order routes are present.
+- A 20-control Trust Center that separates repository-verified safeguards from owner actions and professional review. Public launch remains blocked while required work is outstanding.
+- Restrictive browser headers, keyboard navigation improvements, a skip link and explicit accessibility/legal review gates.
 - An explicit subscription hypothesis with Observer, Operator and Desk tiers for commercial validation.
 
 The earlier commerce records remain schema-compatible so an existing SQLite workspace can upgrade without destructive migration. Their legacy domain utilities remain tested, but the product interface is now exclusively ORBIT.
@@ -39,6 +41,8 @@ The earlier commerce records remain schema-compatible so an existing SQLite work
 ### Safety boundary
 
 ORBIT is currently a decision-support and simulation product. Its native intelligence is an explainable scoring and policy engine, not a language model and not artificial general intelligence. Scenario results are deterministic modeled outcomes. Historical backtests use user-supplied data and are not predictions, live prices or investment returns; the current engine does not model slippage, spread, liquidity or taxes. ORBIT does not provide investment advice, custody assets or execute trades.
+
+The Trust Center is an evidence inventory, not a certification or legal opinion. “Verified” means a safeguard is visible in this repository. Privacy, terms, refunds, accessibility, age handling and launch claims still require the named owner or professional review before public commercialization.
 
 ## Tests and CI
 
@@ -71,6 +75,7 @@ The first offer to validate is **ORBIT Operator at USD 99/month**: unlimited str
 - `src/`: React workspace and independent sign-in screen.
 - `server/`: Express API, sessions, password hashing and SQLite persistence.
 - `lib/domain.ts`: validation, risk sizing, paper performance calculations and preserved customer exports.
+- `lib/trust.ts`: the evidence-backed 20-control launch gate and readiness summary.
 - `tests/`: domain and HTTP/database integration tests.
 - `legacy/`: unchanged original prototype sources, preserved for history.
 
