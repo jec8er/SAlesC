@@ -278,6 +278,10 @@ test("production startup requires HTTPS origin and uses secure session cookies",
     assert.match(r.headers.get("set-cookie") || "", /HttpOnly/);
     assert.match(r.headers.get("set-cookie") || "", /Secure/);
     assert.match(r.headers.get("set-cookie") || "", /SameSite=Strict/);
+    assert.equal(
+      r.headers.get("strict-transport-security"),
+      "max-age=31536000; includeSubDomains",
+    );
   } finally {
     await s.close();
   }

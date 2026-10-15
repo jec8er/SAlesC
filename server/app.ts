@@ -70,7 +70,10 @@ export function createApplication(config: Config) {
       "Origin-Agent-Cluster": "?1",
     });
     if (config.production)
-      res.set("Strict-Transport-Security", "max-age=31536000");
+      res.set(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains",
+      );
     res.set(
       "Content-Security-Policy",
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
