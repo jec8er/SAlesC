@@ -53,6 +53,36 @@ test("private records reject anonymous callers and spoofed Sites identity header
     await s.close();
   }
 });
+test("every response carries restrictive browser security headers", async () => {
+  const s = await running();
+  try {
+    const response = await fetch(s.origin + "/healthz");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+    assert.equal(
+      response.headers.get("cross-origin-opener-policy"),
+      "same-origin",
+    );
+    assert.equal(
+      response.headers.get("cross-origin-resource-policy"),
+      "same-origin",
+    );
+    assert.match(
+      response.headers.get("permissions-policy") || "",
+      /camera=\(\)/,
+    );
+    assert.match(
+      response.headers.get("permissions-policy") || "",
+      /payment=\(\)/,
+    );
+    assert.match(
+      response.headers.get("content-security-policy") || "",
+      /frame-ancestors 'none'/,
+    );
+  } finally {
+    await s.close();
+  }
+});
 test("real login, SQLite save, revision conflict, CSRF and origin enforcement", async () => {
   const s = await running();
   try {

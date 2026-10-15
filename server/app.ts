@@ -61,8 +61,13 @@ export function createApplication(config: Config) {
     res.set({
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
+      "X-DNS-Prefetch-Control": "off",
       "Referrer-Policy": "same-origin",
-      "Permissions-Policy": "microphone=(self)",
+      "Permissions-Policy":
+        "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Origin-Agent-Cluster": "?1",
     });
     if (config.production)
       res.set("Strict-Transport-Security", "max-age=31536000");
