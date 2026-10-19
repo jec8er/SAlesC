@@ -885,6 +885,216 @@ textarea:focus-visible {
   color: var(--muted);
   max-width: 430px;
 }
+.mission-operations {
+  display: grid;
+  grid-template-columns: 0.72fr 1.28fr;
+  border: 1px solid #5cf5e944;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  background:
+    radial-gradient(circle at 88% 8%, #164f5355, transparent 35%), #0d0f17;
+}
+.mission-composer,
+.mission-detail {
+  min-width: 0;
+  padding: 28px;
+}
+.mission-composer {
+  border-right: 1px solid var(--line);
+}
+.mission-composer h2,
+.mission-detail h2 {
+  font: 600 25px var(--display);
+  margin: 18px 0 7px;
+}
+.mission-composer > p,
+.mission-composer > small {
+  color: var(--muted);
+}
+.mission-source {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #080a10;
+  padding: 12px;
+  margin: 20px 0;
+}
+.mission-source span,
+.mission-composer label {
+  color: var(--muted);
+  font: 500 8px var(--mono);
+  letter-spacing: 0.08em;
+}
+.mission-source strong {
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+.mission-source strong:last-child {
+  margin-bottom: 0;
+}
+.mission-composer form {
+  display: grid;
+  gap: 9px;
+}
+.mission-composer textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #080a10;
+  color: var(--text);
+  padding: 12px;
+}
+.mission-composer > small {
+  display: block;
+  font-size: 9px;
+  margin-top: 12px;
+}
+.mission-head,
+.mission-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.mission-head h2 {
+  max-width: 650px;
+  font-size: 22px;
+  text-transform: none;
+}
+.mission-status {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 6px 9px;
+  color: var(--amber);
+  font: 500 8px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.mission-status.owner_gate,
+.mission-status.accepted {
+  border-color: #65f5a64a;
+  background: #65f5a60b;
+  color: var(--green);
+}
+.mission-status.rejected,
+.mission-status.revision_required {
+  border-color: #ff71854a;
+  background: #ff71850b;
+  color: #ff9aaa;
+}
+.mission-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 18px 0;
+}
+.mission-facts > div {
+  padding: 10px 12px;
+  background: #090b12;
+  border-right: 1px solid var(--line);
+}
+.mission-facts > div:last-child {
+  border-right: 0;
+}
+.mission-facts span,
+.mission-facts strong {
+  display: block;
+}
+.mission-facts span {
+  color: var(--muted);
+  font: 500 7px var(--mono);
+  text-transform: uppercase;
+}
+.mission-facts strong {
+  margin-top: 3px;
+  text-transform: capitalize;
+}
+.mission-steps {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.mission-steps li {
+  display: grid;
+  grid-template-columns: 28px 34px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #090b12;
+  padding: 11px;
+}
+.mission-steps li.blocked {
+  border-color: #ff71853d;
+}
+.mission-sequence {
+  color: #596078;
+  font: 500 9px var(--mono);
+  padding-top: 7px;
+}
+.mission-agent-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #5cf5e944;
+  border-radius: 50%;
+  color: var(--cyan);
+}
+.mission-steps small,
+.mission-steps strong {
+  display: block;
+}
+.mission-steps small {
+  color: var(--muted);
+  font: 500 7px var(--mono);
+  text-transform: uppercase;
+}
+.mission-steps strong {
+  margin: 3px 0;
+}
+.mission-steps p {
+  color: var(--muted);
+  font-size: 10px;
+  margin: 0;
+}
+.mission-findings {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #ff71853d;
+  border-radius: 8px;
+  background: #ff71850b;
+  color: #ff9eac;
+  padding: 12px;
+  margin-top: 14px;
+  font-size: 10px;
+}
+.mission-findings span {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.mission-findings svg {
+  flex: none;
+  margin-top: 2px;
+}
+.mission-actions {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+.mission-actions > div {
+  display: flex;
+  gap: 8px;
+}
 .agent-score {
   position: absolute;
   top: 72px;
@@ -1648,7 +1858,14 @@ td small {
   .native-ai-console {
     grid-template-columns: 1fr;
   }
+  .mission-operations {
+    grid-template-columns: 1fr;
+  }
   .ai-control {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .mission-composer {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -1658,6 +1875,21 @@ td small {
   .decision-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .mission-head,
+  .mission-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .mission-facts {
+    grid-template-columns: 1fr;
+  }
+  .mission-facts > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .mission-facts > div:last-child {
+    border-bottom: 0;
   }
   .result-metrics {
     grid-template-columns: 1fr 1fr;

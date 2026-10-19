@@ -25,6 +25,9 @@ Ecomoda, trading, or Sites apps.
 - Scenario results must be labeled as modeled data, never predictions or investment advice.
 - Backtests must avoid look-ahead execution, include fees, disclose omitted market frictions, validate chronological OHLCV input and store summaries rather than raw datasets.
 - Native council decisions must be deterministic, evidence-referenced, independently scored by all six agents and subject to explicit owner acceptance or rejection.
+- Agent missions must preserve the ordered Scout → Strategist → Risk → Compliance → Executor → Auditor handoff. Only an audit-passed mission may reach the owner gate.
+- Accepting a mission records the owner's decision; it must not create a paper trade or trigger live or simulated execution automatically.
+- Voice briefings must use local browser capabilities and must not upload mission data to an external speech or AI provider.
 - Keep external customer exports bounded, escaped, and free of internal costs or prospect data.
 - Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, payment processing, or brokerage dependencies without an explicit product decision.
 - ORBIT project memory remains curated and revision-safe; generated content is not technical validation.
