@@ -38,6 +38,7 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - A 20-control Trust Center that separates repository-verified safeguards from owner actions and professional review. Public launch remains blocked while required work is outstanding.
 - Restrictive browser headers, keyboard navigation improvements, a skip link and explicit accessibility/legal review gates.
 - An explicit subscription hypothesis with Observer, Operator and Desk tiers for commercial validation.
+- A public `/pricing` beta page with Stripe-hosted subscription Checkout, signature-verified and idempotent webhooks, and an owner-only verified MRR/ARR summary. Billing remains disabled until every Stripe variable is configured.
 
 The earlier commerce records remain schema-compatible so an existing SQLite workspace can upgrade without destructive migration. Their legacy domain utilities remain tested, but the product interface is now exclusively ORBIT.
 
@@ -72,6 +73,8 @@ For deployment on a server you control:
 ## Revenue approach
 
 The first offer to validate is **ORBIT Operator at USD 99/month**: unlimited strategy hypotheses, the full bounded agent workflow, owner-defined risk controls, audit exports and alerts. Observer (USD 29/month) can serve self-directed users; Desk (USD 299/month) is the team workflow. These prices are hypotheses, not current revenue. The product should prove retention and willingness to pay in paper mode before adding paid data feeds or any broker integration.
+
+The paid beta uses Stripe Billing with hosted Checkout. Create a separate Stripe sandbox, one Product and recurring Price per plan, then configure the variables documented in `.env.example`. Use a least-privilege restricted key and configure the webhook endpoint at `/api/billing/webhook`; never commit keys. Subscription access is derived from verified webhook events, not the browser success page. Stripe Tax is intentionally not enabled until the business has confirmed its registrations and tax obligations.
 
 ## Project structure
 

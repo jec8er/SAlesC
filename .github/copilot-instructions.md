@@ -29,7 +29,9 @@ Ecomoda, trading, or Sites apps.
 - Accepting a mission records the owner's decision; it must not create a paper trade or trigger live or simulated execution automatically.
 - Voice briefings must use local browser capabilities and must not upload mission data to an external speech or AI provider.
 - Keep external customer exports bounded, escaped, and free of internal costs or prospect data.
-- Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, payment processing, or brokerage dependencies without an explicit product decision.
+- Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, or brokerage dependencies without an explicit product decision.
+- Stripe subscription changes must keep secrets server-side, use restricted keys, hosted Checkout, signature-verified idempotent webhooks and first-class Customer/Subscription identifiers. Never grant access from a success page alone.
+- Do not enable automatic tax collection until active registrations and tax obligations are confirmed.
 - ORBIT project memory remains curated and revision-safe; generated content is not technical validation.
 - Treat Trust Center statuses as evidence labels, not certifications. Never claim legal compliance, lawsuit prevention, accessibility conformance or regulatory approval from a checklist alone.
 - Keep public launch blocked while a Trust Center item requires owner action or professional review. Do not invent legal policies, business details, consent records or audit results.

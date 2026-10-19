@@ -226,6 +226,12 @@ export default function Studio({
   const [latestCouncilId, setLatestCouncilId] = useState("");
   const [latestMissionId, setLatestMissionId] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [billingSummary, setBillingSummary] = useState<{
+    configured: boolean;
+    activeCustomers: number;
+    mrr: number;
+    annualRunRate: number;
+  } | null>(null);
   const trading = tradingState(workspace);
   const metrics = paperMetrics(trading);
   const selected =
@@ -284,6 +290,16 @@ export default function Studio({
     },
     [],
   );
+  useEffect(() => {
+    if (view !== "plans") return;
+    fetch("/api/billing/summary")
+      .then(async (response) => {
+        if (!response.ok) throw Error("Billing summary unavailable");
+        return response.json();
+      })
+      .then(setBillingSummary)
+      .catch(() => setBillingSummary(null));
+  }, [view]);
 
   async function persist(nextTrading: TradingWorkspace, message: string) {
     const next = structuredClone(workspace);
@@ -2002,6 +2018,27 @@ export default function Studio({
                     ]}
                   />
                 </div>
+                <section className="billing-command">
+                  <div>
+                    <p className="signal-label">
+                      VERIFIED SUBSCRIPTION REVENUE
+                    </p>
+                    <h2>
+                      {billingSummary
+                        ? moneyLabel(billingSummary.mrr, "USD")
+                        : "—"}
+                      <small>/month</small>
+                    </h2>
+                    <p>
+                      {billingSummary?.configured
+                        ? `${billingSummary.activeCustomers} active customers · ${moneyLabel(billingSummary.annualRunRate, "USD")} annual run rate`
+                        : "Reconnect Stripe and configure all three Price IDs to open the paid beta."}
+                    </p>
+                  </div>
+                  <a className="neon-button" href="/pricing" target="_blank">
+                    Open public pricing <ChevronRight size={15} />
+                  </a>
+                </section>
                 <div className="commercial-note">
                   <Sparkles />
                   <div>
