@@ -11,6 +11,11 @@ import { runCycle } from "../lib/ecomoda-core.mjs";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
+import {
+  billingPlans,
+  type BillingGateway,
+  type BillingPlan,
+} from "./billing.ts";
 export type Config = {
   databasePath: string;
   passwordHash: string;
@@ -23,6 +28,7 @@ export type Config = {
   ecomodaInfer?: EcomodaInference;
   ecomodaTimeoutMs?: number;
   ecomodaMemory?: ProjectMemoryStore;
+  billing?: BillingGateway;
 };
 export function createApplication(config: Config) {
   if (!validPasswordHash(config.passwordHash))
@@ -50,7 +56,7 @@ export function createApplication(config: Config) {
   const db = new DatabaseSync(config.databasePath);
   db.exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
   db.exec(
-    "CREATE TABLE IF NOT EXISTS workspaces (owner_id TEXT PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires INTEGER NOT NULL);",
+    "CREATE TABLE IF NOT EXISTS workspaces (owner_id TEXT PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS billing_events (event_id TEXT PRIMARY KEY, received_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS billing_subscriptions (customer_id TEXT PRIMARY KEY, subscription_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL, plan TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT NOT NULL);",
   );
   db.prepare(
     "INSERT OR IGNORE INTO workspaces(owner_id,payload,revision) VALUES(?,?,0)",
@@ -90,6 +96,50 @@ export function createApplication(config: Config) {
     }
     next();
   });
+  app.post(
+    "/api/billing/webhook",
+    express.raw({ type: "application/json", limit: "100kb" }),
+    async (req, res) => {
+      if (!config.billing)
+        return res.status(503).json({ error: "Billing is not configured" });
+      const signature = req.get("stripe-signature") || "";
+      if (!signature)
+        return res.status(400).json({ error: "Missing Stripe signature" });
+      try {
+        const update = await config.billing.parseWebhook(
+          req.body as Buffer,
+          signature,
+        );
+        if (!update) return res.json({ received: true });
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          const recorded = db
+            .prepare(
+              "INSERT OR IGNORE INTO billing_events(event_id,received_at) VALUES(?,?)",
+            )
+            .run(update.eventId, new Date(now()).toISOString());
+          if (recorded.changes)
+            db.prepare(
+              "INSERT INTO billing_subscriptions(customer_id,subscription_id,email,plan,status,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(customer_id) DO UPDATE SET subscription_id=excluded.subscription_id,email=excluded.email,plan=excluded.plan,status=excluded.status,updated_at=excluded.updated_at",
+            ).run(
+              update.customerId,
+              update.subscriptionId,
+              update.email,
+              update.plan,
+              update.status,
+              new Date(now()).toISOString(),
+            );
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+        res.json({ received: true });
+      } catch {
+        res.status(400).json({ error: "Invalid Stripe webhook" });
+      }
+    },
+  );
   app.use(express.json({ limit: "350kb", strict: true }));
   const cookieName = "sc_session";
   function token(req: Request) {
@@ -127,6 +177,46 @@ export function createApplication(config: Config) {
   }
   const attempts = new Map<string, { count: number; until: number }>();
   app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/billing/config", (_req, res) =>
+    res.json({
+      enabled: Boolean(config.billing),
+      plans: Object.entries(billingPlans).map(([id, plan]) => ({
+        id,
+        ...plan,
+      })),
+    }),
+  );
+  const checkoutAttempts = new Map<string, { count: number; until: number }>();
+  const checkoutRequest = z
+    .object({ plan: z.enum(["observer", "operator", "desk"]) })
+    .strict();
+  app.post("/api/billing/checkout", async (req, res) => {
+    if (!config.billing)
+      return res.status(503).json({ error: "Paid beta is not configured" });
+    const parsed = checkoutRequest.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid billing plan" });
+    const ip = req.ip || "unknown";
+    const current = checkoutAttempts.get(ip);
+    const time = now();
+    if (current && current.until > time && current.count >= 10)
+      return res.status(429).json({ error: "Too many checkout attempts" });
+    checkoutAttempts.set(ip, {
+      count: current && current.until > time ? current.count + 1 : 1,
+      until: current && current.until > time ? current.until : time + 3600000,
+    });
+    try {
+      const origin =
+        config.publicOrigin || `${req.protocol}://${req.get("host")}`;
+      const checkout = await config.billing.createCheckout(
+        parsed.data.plan as BillingPlan,
+        origin,
+      );
+      res.status(201).json(checkout);
+    } catch {
+      res.status(502).json({ error: "Checkout is temporarily unavailable" });
+    }
+  });
   app.get("/api/session", (req, res) => {
     const s = session(req);
     if (!s) return res.status(401).json({ error: "Sign in required" });
@@ -175,6 +265,31 @@ export function createApplication(config: Config) {
       .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
       .get("owner") as { payload: string; revision: number };
     res.json({ workspace: JSON.parse(row.payload), revision: row.revision });
+  });
+  app.get("/api/billing/summary", auth, (_req, res) => {
+    const subscriptions = db
+      .prepare(
+        "SELECT customer_id AS customerId,email,plan,status,updated_at AS updatedAt FROM billing_subscriptions ORDER BY updated_at DESC LIMIT 500",
+      )
+      .all() as Array<{
+      customerId: string;
+      email: string;
+      plan: BillingPlan;
+      status: string;
+      updatedAt: string;
+    }>;
+    const active = subscriptions.filter((item) => item.status === "active");
+    const mrr = active.reduce(
+      (total, item) => total + (billingPlans[item.plan]?.monthlyUsd || 0),
+      0,
+    );
+    res.json({
+      configured: Boolean(config.billing),
+      activeCustomers: active.length,
+      mrr,
+      annualRunRate: mrr * 12,
+      subscriptions,
+    });
   });
   const projectId = /^[a-z0-9][a-z0-9_-]{0,79}$/;
   app.get("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {

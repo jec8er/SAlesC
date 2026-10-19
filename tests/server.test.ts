@@ -9,6 +9,7 @@ import { passwordHash } from "../server/auth.ts";
 import { emptyWorkspace } from "../lib/domain.ts";
 import { createFileStore } from "../lib/ecomoda-file-store.mjs";
 import { createProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
+import type { BillingGateway } from "../server/billing.ts";
 const testPassword = "fixture-password-not-a-real-credential";
 const hash = passwordHash(testPassword);
 async function running(databasePath = ":memory:", extra = {}) {
@@ -79,6 +80,94 @@ test("every response carries restrictive browser security headers", async () => 
       response.headers.get("content-security-policy") || "",
       /frame-ancestors 'none'/,
     );
+  } finally {
+    await s.close();
+  }
+});
+test("paid beta checkout and signed webhooks produce verified revenue", async () => {
+  const billing: BillingGateway = {
+    async createCheckout(plan, origin) {
+      return { url: `${origin}/stripe/${plan}` };
+    },
+    async parseWebhook(_payload, signature) {
+      if (signature !== "valid") throw Error("Invalid signature");
+      return {
+        eventId: "evt_beta_paid",
+        customerId: "cus_beta",
+        subscriptionId: "sub_beta",
+        email: "buyer@example.com",
+        plan: "operator",
+        status: "active",
+      };
+    },
+  };
+  const s = await running(":memory:", { billing });
+  try {
+    let r = await fetch(s.origin + "/api/billing/config");
+    assert.equal(r.status, 200);
+    assert.equal(((await r.json()) as { enabled: boolean }).enabled, true);
+
+    r = await fetch(s.origin + "/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: "operator" }),
+    });
+    assert.equal(r.status, 201);
+    assert.equal(
+      ((await r.json()) as { url: string }).url,
+      `${s.origin}/stripe/operator`,
+    );
+
+    r = await fetch(s.origin + "/api/billing/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "stripe-signature": "invalid",
+      },
+      body: "{}",
+    });
+    assert.equal(r.status, 400);
+
+    for (let index = 0; index < 2; index++) {
+      r = await fetch(s.origin + "/api/billing/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "stripe-signature": "valid",
+        },
+        body: "{}",
+      });
+      assert.equal(r.status, 200);
+    }
+
+    r = await fetch(s.origin + "/api/billing/summary");
+    assert.equal(r.status, 401);
+
+    const owner = await login(s.origin);
+    r = await fetch(s.origin + "/api/billing/summary", {
+      headers: { Cookie: owner.cookie },
+    });
+    const summary = (await r.json()) as {
+      configured: boolean;
+      activeCustomers: number;
+      mrr: number;
+      annualRunRate: number;
+      subscriptions: Array<{
+        customerId: string;
+        email: string;
+        plan: string;
+        status: string;
+        updatedAt: string;
+      }>;
+    };
+    assert.equal(summary.configured, true);
+    assert.equal(summary.activeCustomers, 1);
+    assert.equal(summary.mrr, 99);
+    assert.equal(summary.annualRunRate, 1188);
+    assert.equal(summary.subscriptions.length, 1);
+    assert.equal(summary.subscriptions[0].customerId, "cus_beta");
+    assert.equal(summary.subscriptions[0].plan, "operator");
+    assert.match(summary.subscriptions[0].updatedAt, /^\d{4}-/);
   } finally {
     await s.close();
   }
