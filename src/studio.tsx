@@ -14,6 +14,7 @@ import {
   FileCheck2,
   FlaskConical,
   Gauge,
+  ListChecks,
   LockKeyhole,
   LogOut,
   Orbit,
@@ -27,6 +28,7 @@ import {
   Target,
   TriangleAlert,
   Upload,
+  Volume2,
   WalletCards,
   X,
   type LucideIcon,
@@ -34,6 +36,7 @@ import {
 import { trustControls, trustSummary } from "../lib/trust";
 import {
   type AgentEvent,
+  type AgentMission,
   type BacktestResult,
   type CouncilRun,
   type Strategy,
@@ -41,9 +44,11 @@ import {
   type Workspace,
   emptyTradingWorkspace,
   emptyWorkspace,
+  decideAgentMission,
   moneyLabel,
   paperMetrics,
   parseCandleCSV,
+  planAgentMission,
   runSMABacktest,
   runOrbitCouncil,
   strategyRisk,
@@ -219,6 +224,8 @@ export default function Studio({
   const [selectedId, setSelectedId] = useState("");
   const [latestBacktestId, setLatestBacktestId] = useState("");
   const [latestCouncilId, setLatestCouncilId] = useState("");
+  const [latestMissionId, setLatestMissionId] = useState("");
+  const [speaking, setSpeaking] = useState(false);
   const trading = tradingState(workspace);
   const metrics = paperMetrics(trading);
   const selected =
@@ -228,11 +235,21 @@ export default function Studio({
     trading.backtests.find((item) => item.id === latestBacktestId) ||
     trading.backtests[0];
   const latestCouncil =
-    trading.councilRuns.find((item) => item.id === latestCouncilId) ||
+    trading.councilRuns.find(
+      (item) => item.id === latestCouncilId && item.strategyId === selected?.id,
+    ) ||
     trading.councilRuns.find((item) => item.strategyId === selected?.id) ||
     trading.councilRuns[0];
   const councilForSelected =
     latestCouncil?.strategyId === selected?.id ? latestCouncil : undefined;
+  const latestMission =
+    trading.agentMissions.find(
+      (item) => item.id === latestMissionId && item.strategyId === selected?.id,
+    ) ||
+    trading.agentMissions.find((item) => item.strategyId === selected?.id) ||
+    trading.agentMissions[0];
+  const missionForSelected =
+    latestMission?.strategyId === selected?.id ? latestMission : undefined;
 
   async function load() {
     setError("");
@@ -261,6 +278,12 @@ export default function Studio({
     const timer = setTimeout(() => setToast(""), 3500);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(
+    () => () => {
+      window.speechSynthesis?.cancel();
+    },
+    [],
+  );
 
   async function persist(nextTrading: TradingWorkspace, message: string) {
     const next = structuredClone(workspace);
@@ -621,6 +644,91 @@ export default function Studio({
       },
       `Council recommendation ${ownerDecision}`,
     );
+  }
+
+  async function createMission(form: HTMLFormElement) {
+    if (!selected || !councilForSelected) return;
+    setError("");
+    const objective = String(new FormData(form).get("objective") || "");
+    try {
+      const mission = planAgentMission(
+        trading,
+        selected,
+        councilForSelected,
+        objective,
+        { id: crypto.randomUUID(), createdAt: timestamp() },
+      );
+      const saved = await persist(
+        {
+          ...trading,
+          agentMissions: [mission, ...trading.agentMissions],
+          events: [
+            agentEvent(
+              "auditor",
+              mission.review.verdict === "pass" ? "approved" : "blocked",
+              `Mission audit returned ${mission.review.verdict}; owner gate ${mission.status === "owner_gate" ? "opened" : "withheld"}.`,
+            ),
+            agentEvent(
+              "strategist",
+              "proposed",
+              `Six-agent mission planned for ${selected.name}.`,
+            ),
+            ...trading.events,
+          ],
+        },
+        "Agent mission saved",
+      );
+      if (saved) {
+        setLatestMissionId(mission.id);
+        form.reset();
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Mission planning failed",
+      );
+    }
+  }
+
+  async function decideMission(
+    mission: AgentMission,
+    decision: "accepted" | "rejected",
+  ) {
+    try {
+      const decided = decideAgentMission(mission, decision, timestamp());
+      await persist(
+        {
+          ...trading,
+          agentMissions: trading.agentMissions.map((item) =>
+            item.id === mission.id ? decided : item,
+          ),
+          events: [
+            agentEvent(
+              "auditor",
+              decision === "accepted" ? "approved" : "blocked",
+              `Owner ${decision} mission ${mission.id.slice(0, 8)}. No live action was triggered.`,
+            ),
+            ...trading.events,
+          ],
+        },
+        `Mission ${decision}`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Decision failed");
+    }
+  }
+
+  function speakMission(mission: AgentMission) {
+    if (!("speechSynthesis" in window)) {
+      setError("Speech playback is not supported by this browser");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(mission.briefing);
+    utterance.rate = 0.95;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   }
   const agentStates = useMemo(
     () =>
@@ -1243,9 +1351,9 @@ export default function Studio({
             {view === "agents" && (
               <>
                 <PageTitle
-                  kicker="ORBIT NATIVE INTELLIGENCE / V1"
+                  kicker="ORBIT NATIVE INTELLIGENCE / AGENT OPERATIONS V2"
                   title="AI Council"
-                  detail="ORBIT analyzes its own stored evidence locally. Six specialized agents score the strategy independently, form a consensus and preserve your final decision as memory."
+                  detail="ORBIT analyzes stored evidence locally, then turns an accepted council decision into a traceable six-agent mission. The owner remains the final gate."
                 />
                 <section className="native-ai-console">
                   <div className="ai-control">
@@ -1363,6 +1471,194 @@ export default function Studio({
                         <p>
                           Run the council to create the first explainable,
                           owner-controlled decision for this strategy.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+                <section className="mission-operations">
+                  <div className="mission-composer">
+                    <span className="native-badge">
+                      <ListChecks size={15} /> MISSION BOARD
+                    </span>
+                    <h2>Plan the handoffs</h2>
+                    <p>
+                      Convert the selected council run into one bounded
+                      objective. Every mission moves in order from Scout to
+                      Auditor and keeps live execution locked.
+                    </p>
+                    <div className="mission-source">
+                      <span>STRATEGY</span>
+                      <strong>{selected?.name || "None selected"}</strong>
+                      <span>COUNCIL SOURCE</span>
+                      <strong>
+                        {councilForSelected
+                          ? `${councilForSelected.recommendation.replaceAll("_", " ")} · ${councilForSelected.ownerDecision}`
+                          : "Run the council first"}
+                      </strong>
+                    </div>
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void createMission(event.currentTarget);
+                      }}
+                    >
+                      <label htmlFor="mission-objective">
+                        Mission objective
+                      </label>
+                      <textarea
+                        id="mission-objective"
+                        name="objective"
+                        minLength={8}
+                        maxLength={600}
+                        required
+                        rows={4}
+                        placeholder="Example: challenge the ETH paper thesis against its stored evidence and prepare a bounded paper scenario."
+                      />
+                      <button
+                        className="neon-button full"
+                        disabled={!selected || !councilForSelected || busy}
+                      >
+                        <ListChecks size={16} /> Plan six-agent mission
+                      </button>
+                    </form>
+                    <small>
+                      Planning never sends an order. Failed gates remain visible
+                      as revision requirements.
+                    </small>
+                  </div>
+                  <div className="mission-detail">
+                    {missionForSelected ? (
+                      <>
+                        <div className="mission-head">
+                          <div>
+                            <p className="signal-label">LATEST MISSION</p>
+                            <h2>{missionForSelected.objective}</h2>
+                          </div>
+                          <span
+                            className={`mission-status ${missionForSelected.status}`}
+                          >
+                            {missionForSelected.status.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <div className="mission-facts">
+                          <ResultMetric
+                            label="Handoffs"
+                            value={`${missionForSelected.steps.length}/6`}
+                          />
+                          <ResultMetric
+                            label="Audit"
+                            value={missionForSelected.review.verdict}
+                          />
+                          <ResultMetric
+                            label="Owner"
+                            value={missionForSelected.ownerDecision}
+                          />
+                        </div>
+                        <ol className="mission-steps">
+                          {missionForSelected.steps.map((step) => {
+                            const AgentIcon =
+                              agents.find((agent) => agent.id === step.agent)
+                                ?.icon || Bot;
+                            return (
+                              <li className={step.state} key={step.agent}>
+                                <span className="mission-sequence">
+                                  {String(step.sequence).padStart(2, "0")}
+                                </span>
+                                <span className="mission-agent-icon">
+                                  <AgentIcon size={16} />
+                                </span>
+                                <div>
+                                  <small>
+                                    {step.agent} · {step.state} ·{" "}
+                                    {step.evidenceRefs.length} evidence ref
+                                    {step.evidenceRefs.length === 1 ? "" : "s"}
+                                  </small>
+                                  <strong>{step.title}</strong>
+                                  <p>{step.output}</p>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                        {missionForSelected.review.findings.length > 0 && (
+                          <div className="mission-findings">
+                            <strong>Independent review findings</strong>
+                            {missionForSelected.review.findings.map(
+                              (finding) => (
+                                <span key={finding}>
+                                  <TriangleAlert size={13} /> {finding}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        )}
+                        <div className="mission-actions">
+                          <button
+                            className="ghost-button"
+                            type="button"
+                            onClick={() => {
+                              if (speaking) {
+                                window.speechSynthesis.cancel();
+                                setSpeaking(false);
+                              } else speakMission(missionForSelected);
+                            }}
+                          >
+                            <Volume2 size={15} />
+                            {speaking ? "Stop briefing" : "Play local briefing"}
+                          </button>
+                          <span
+                            className={`owner-decision ${missionForSelected.ownerDecision}`}
+                          >
+                            OWNER: {missionForSelected.ownerDecision}
+                          </span>
+                          {missionForSelected.ownerDecision === "pending" && (
+                            <div>
+                              <button
+                                className="ghost-button"
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  void decideMission(
+                                    missionForSelected,
+                                    "rejected",
+                                  )
+                                }
+                              >
+                                Reject
+                              </button>
+                              <button
+                                className="neon-button"
+                                type="button"
+                                disabled={
+                                  busy ||
+                                  missionForSelected.status !== "owner_gate"
+                                }
+                                title={
+                                  missionForSelected.status === "owner_gate"
+                                    ? "Accept this audited mission"
+                                    : "Resolve every audit finding before acceptance"
+                                }
+                                onClick={() =>
+                                  void decideMission(
+                                    missionForSelected,
+                                    "accepted",
+                                  )
+                                }
+                              >
+                                <Check size={15} /> Accept mission
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="blank-decision">
+                        <ListChecks size={48} />
+                        <h2>No mission yet</h2>
+                        <p>
+                          Run the council, state a bounded objective and inspect
+                          every handoff before making the final owner decision.
                         </p>
                       </div>
                     )}

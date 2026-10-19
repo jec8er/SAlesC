@@ -17,6 +17,8 @@ import {
   parseCandleCSV,
   runSMABacktest,
   runOrbitCouncil,
+  planAgentMission,
+  decideAgentMission,
   strategyRisk,
 } from "../lib/domain.ts";
 const receipt = {
@@ -298,15 +300,141 @@ test("ORBIT native council forms an explainable paper recommendation", () => {
   );
 });
 
-test("older ORBIT workspaces gain empty council memory on parse", () => {
+test("ORBIT missions preserve six-agent handoffs and owner authority", () => {
+  const workspace = emptyWorkspace();
+  const strategy = {
+    id: "mission-supported",
+    name: "Audited paper thesis",
+    symbol: "ETH/USDC",
+    timeframe: "4h" as const,
+    thesis: "A bounded thesis backed by independent historical datasets.",
+    status: "approved" as const,
+    confidence: 78,
+    entry: 100,
+    stopLoss: 95,
+    takeProfit: 110,
+    riskPercent: 1,
+    createdAt: "2026-10-12T12:00:00.000Z",
+  };
+  workspace.trading!.strategies.push(strategy);
+  workspace.trading!.backtests = [0, 1, 2].map((index) => ({
+    id: `mission-bt-${index}`,
+    strategyId: strategy.id,
+    symbol: strategy.symbol,
+    sourceName: `dataset-${index}.csv`,
+    sourceHash: String(index + 2).repeat(64),
+    algorithm: "sma-crossover-v1" as const,
+    fastWindow: 10 + index * 5,
+    slowWindow: 40 + index * 10,
+    feeBps: 10,
+    positionPercent: 10,
+    bars: 1000,
+    from: "2026-01-01T00:00:00.000Z",
+    to: "2026-06-01T00:00:00.000Z",
+    startingBalance: 10000,
+    endingBalance: 11200,
+    netReturnPercent: 12,
+    buyHoldReturnPercent: 5,
+    maxDrawdownPercent: 5,
+    winRate: 60,
+    trades: 6,
+    profitFactor: 2,
+    testedAt: `2026-10-1${index + 1}T12:00:00.000Z`,
+  }));
+  const generated = runOrbitCouncil(workspace.trading!, strategy, {
+    id: "mission-council",
+    generatedAt: "2026-10-12T13:00:00.000Z",
+  });
+  const council = { ...generated, ownerDecision: "accepted" as const };
+  workspace.trading!.councilRuns.push(council);
+  const mission = planAgentMission(
+    workspace.trading!,
+    strategy,
+    council,
+    "Challenge the stored evidence and prepare one bounded paper scenario.",
+    {
+      id: "mission-1",
+      createdAt: "2026-10-12T14:00:00.000Z",
+    },
+  );
+
+  assert.equal(mission.status, "owner_gate");
+  assert.equal(mission.review.verdict, "pass");
+  assert.equal(mission.ownerDecision, "pending");
+  assert.deepEqual(
+    mission.steps.map((step) => step.agent),
+    ["scout", "strategist", "risk", "compliance", "executor", "auditor"],
+  );
+  assert.match(mission.steps[4].output, /paper-only/i);
+  assert.match(mission.steps[4].output, /No live order route exists/i);
+
+  const accepted = decideAgentMission(
+    mission,
+    "accepted",
+    "2026-10-12T15:00:00.000Z",
+  );
+  assert.equal(accepted.status, "accepted");
+  assert.equal(accepted.ownerDecision, "accepted");
+});
+
+test("ORBIT missions cannot bypass council evidence or the owner gate", () => {
+  const workspace = emptyWorkspace();
+  const strategy = {
+    id: "mission-unproven",
+    name: "Unproven mission",
+    symbol: "BTC/USDC",
+    timeframe: "4h" as const,
+    thesis: "A thesis awaiting evidence.",
+    status: "review" as const,
+    confidence: 70,
+    entry: 100,
+    stopLoss: 95,
+    takeProfit: 110,
+    riskPercent: 1,
+    createdAt: "2026-10-12T12:00:00.000Z",
+  };
+  workspace.trading!.strategies.push(strategy);
+  const council = runOrbitCouncil(workspace.trading!, strategy, {
+    id: "unproven-council",
+    generatedAt: "2026-10-12T13:00:00.000Z",
+  });
+  workspace.trading!.councilRuns.push(council);
+  const mission = planAgentMission(
+    workspace.trading!,
+    strategy,
+    council,
+    "Prepare a paper scenario without inventing missing evidence.",
+    {
+      id: "mission-2",
+      createdAt: "2026-10-12T14:00:00.000Z",
+    },
+  );
+
+  assert.equal(mission.status, "revision_required");
+  assert.equal(mission.steps[4].state, "blocked");
+  assert.throws(
+    () => decideAgentMission(mission, "accepted", "2026-10-12T15:00:00.000Z"),
+    /audit-passed mission/,
+  );
+  const rejected = decideAgentMission(
+    mission,
+    "rejected",
+    "2026-10-12T15:00:00.000Z",
+  );
+  assert.equal(rejected.ownerDecision, "rejected");
+});
+
+test("older ORBIT workspaces gain empty council and mission memory on parse", () => {
   const workspace = emptyWorkspace();
   const legacyTrading = { ...workspace.trading } as Record<string, unknown>;
   delete legacyTrading.councilRuns;
+  delete legacyTrading.agentMissions;
   const parsed = workspaceSchema.parse({
     ...workspace,
     trading: legacyTrading,
   });
   assert.deepEqual(parsed.trading?.councilRuns, []);
+  assert.deepEqual(parsed.trading?.agentMissions, []);
 });
 test("refunds, costs and fees reduce margin and currencies remain separate", () => {
   const w = emptyWorkspace();

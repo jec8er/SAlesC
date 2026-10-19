@@ -23,6 +23,8 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
 - ORBIT Intelligence V1: a local, deterministic multi-agent council that independently scores evidence, strategy quality, risk, compliance, execution history and audit consistency.
+- Agent Operations V2: a mission board that preserves the ordered Scout → Strategist → Risk → Compliance → Executor → Auditor handoff, exposes each output and evidence reference, and withholds the owner gate when audit findings remain.
+- Local browser voice briefings for mission summaries. Audio uses the device speech engine; no mission data is sent to an AI or speech provider by ORBIT.
 - Explainable recommendations with an overall score, evidence confidence, agent consensus, explicit blockers and evidence references.
 - Owner acceptance/rejection stored as adaptive memory; ORBIT incorporates prior decisions into later audit scores while preserving human authority.
 - Strategy creation with explicit thesis, confidence, entry, invalidation, target and bounded risk.
@@ -32,6 +34,7 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Browser-side historical backtesting from chronological OHLCV CSV files, with next-bar execution, configurable SMA windows and per-side fees.
 - Comparable backtest evidence: net return, buy-and-hold return, maximum drawdown, win rate, trade count and profit factor. Only summaries and a SHA-256 dataset fingerprint are stored; raw datasets remain local.
 - Owner-controlled portfolio limits. Live execution is hard-locked; no exchange keys, wallets or live order routes are present.
+- Mission acceptance records the owner decision only. It never creates a paper trade or triggers an execution action automatically.
 - A 20-control Trust Center that separates repository-verified safeguards from owner actions and professional review. Public launch remains blocked while required work is outstanding.
 - Restrictive browser headers, keyboard navigation improvements, a skip link and explicit accessibility/legal review gates.
 - An explicit subscription hypothesis with Observer, Operator and Desk tiers for commercial validation.

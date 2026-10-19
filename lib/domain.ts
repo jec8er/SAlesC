@@ -252,6 +252,76 @@ export const councilRunSchema = z
   })
   .strict();
 
+const agentRoleSchema = z.enum([
+  "scout",
+  "strategist",
+  "risk",
+  "compliance",
+  "executor",
+  "auditor",
+]);
+
+export const agentMissionSchema = z
+  .object({
+    id: text,
+    strategyId: text,
+    councilRunId: text,
+    engineVersion: z.literal("orbit-agent-operations-v2"),
+    objective: z.string().trim().min(8).max(600),
+    status: z.enum(["revision_required", "owner_gate", "accepted", "rejected"]),
+    steps: z
+      .array(
+        z
+          .object({
+            sequence: z.number().int().min(1).max(6),
+            agent: agentRoleSchema,
+            title: z.string().trim().min(1).max(120),
+            state: z.enum(["ready", "blocked"]),
+            output: z.string().trim().min(1).max(700),
+            evidenceRefs: z.array(text).max(50),
+          })
+          .strict(),
+      )
+      .length(6),
+    review: z
+      .object({
+        verdict: z.enum(["pass", "revise", "blocked"]),
+        findings: z.array(z.string().trim().min(1).max(300)).max(20),
+      })
+      .strict(),
+    briefing: z.string().trim().min(1).max(2400),
+    ownerDecision: z.enum(["pending", "accepted", "rejected"]),
+    createdAt: z.string().datetime(),
+    decidedAt: z.string().datetime().optional(),
+  })
+  .strict()
+  .superRefine((mission, context) => {
+    const expectedAgents = agentRoleSchema.options;
+    if (
+      mission.steps.some(
+        (step, index) =>
+          step.sequence !== index + 1 || step.agent !== expectedAgents[index],
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Mission handoffs must preserve the six-agent sequence",
+        path: ["steps"],
+      });
+    if (mission.ownerDecision === "pending" && mission.decidedAt)
+      context.addIssue({
+        code: "custom",
+        message: "A pending mission cannot have a decision timestamp",
+        path: ["decidedAt"],
+      });
+    if (mission.ownerDecision !== "pending" && !mission.decidedAt)
+      context.addIssue({
+        code: "custom",
+        message: "A decided mission requires a decision timestamp",
+        path: ["decidedAt"],
+      });
+  });
+
 export const tradingSchema = z
   .object({
     mode: z.literal("paper"),
@@ -263,6 +333,7 @@ export const tradingSchema = z
     paperTrades: z.array(paperTradeSchema).max(2000),
     backtests: z.array(backtestResultSchema).max(1000).default([]),
     councilRuns: z.array(councilRunSchema).max(1000).default([]),
+    agentMissions: z.array(agentMissionSchema).max(1000).default([]),
     events: z.array(agentEventSchema).max(5000),
   })
   .strict()
@@ -272,6 +343,7 @@ export const tradingSchema = z
       ["paperTrades", trading.paperTrades],
       ["backtests", trading.backtests],
       ["councilRuns", trading.councilRuns],
+      ["agentMissions", trading.agentMissions],
       ["events", trading.events],
     ] as const;
     for (const [name, records] of collections) {
@@ -304,6 +376,24 @@ export const tradingSchema = z
         message: "A council run must reference an existing strategy",
         path: ["councilRuns"],
       });
+    const councilById = new Map(
+      trading.councilRuns.map((run) => [run.id, run]),
+    );
+    if (
+      trading.agentMissions.some((mission) => {
+        const council = councilById.get(mission.councilRunId);
+        return (
+          !strategyIds.has(mission.strategyId) ||
+          !council ||
+          council.strategyId !== mission.strategyId
+        );
+      })
+    )
+      context.addIssue({
+        code: "custom",
+        message: "An agent mission must reference its strategy and council run",
+        path: ["agentMissions"],
+      });
   });
 
 export type TradingWorkspace = z.infer<typeof tradingSchema>;
@@ -317,6 +407,7 @@ export const emptyTradingWorkspace = (): TradingWorkspace => ({
   paperTrades: [],
   backtests: [],
   councilRuns: [],
+  agentMissions: [],
   events: [],
 });
 
@@ -413,6 +504,7 @@ export type PaperTrade = z.infer<typeof paperTradeSchema>;
 export type AgentEvent = z.infer<typeof agentEventSchema>;
 export type BacktestResult = z.infer<typeof backtestResultSchema>;
 export type CouncilRun = z.infer<typeof councilRunSchema>;
+export type AgentMission = z.infer<typeof agentMissionSchema>;
 export type Candle = {
   timestamp: string;
   open: number;
@@ -903,6 +995,151 @@ export function runOrbitCouncil(
       priorCouncilRuns: priorRuns.length,
     },
     ownerDecision: "pending",
+  });
+}
+
+export function planAgentMission(
+  trading: TradingWorkspace,
+  strategy: Strategy,
+  council: CouncilRun,
+  objective: string,
+  identity: { id: string; createdAt: string },
+): AgentMission {
+  if (council.strategyId !== strategy.id)
+    throw Error("Council run does not belong to the selected strategy");
+  if (!trading.councilRuns.some((run) => run.id === council.id))
+    throw Error("Mission planning requires a persisted council run");
+
+  const byAgent = new Map(
+    council.agents.map((result) => [result.agent, result]),
+  );
+  const result = (agent: AgentEvent["agent"]) => byAgent.get(agent)!;
+  const hardFindings = [
+    ...council.blockers,
+    council.recommendation !== "approve_paper"
+      ? `Council recommendation is ${council.recommendation.replace("_", " ")}, not approve paper.`
+      : "",
+    council.ownerDecision !== "accepted"
+      ? "The owner has not accepted the underlying council recommendation."
+      : "",
+    ...council.agents
+      .filter((agent) => agent.verdict === "block")
+      .map((agent) => `${agent.agent} issued a blocking verdict.`),
+  ].filter(Boolean);
+  const concerns = council.agents
+    .filter((agent) => agent.verdict === "concern")
+    .map((agent) => `${agent.agent} concern: ${agent.rationale}`);
+  const reviewVerdict: AgentMission["review"]["verdict"] = hardFindings.length
+    ? council.recommendation === "reject"
+      ? "blocked"
+      : "revise"
+    : "pass";
+  const executionReady = reviewVerdict === "pass";
+  const evidence = {
+    market: council.evidence.backtestIds,
+    execution: council.evidence.paperTradeIds,
+    council: [council.id],
+  };
+  const steps: AgentMission["steps"] = [
+    {
+      sequence: 1,
+      agent: "scout",
+      title: "Evidence inventory",
+      state: result("scout").verdict === "block" ? "blocked" : "ready",
+      output: result("scout").rationale,
+      evidenceRefs: evidence.market,
+    },
+    {
+      sequence: 2,
+      agent: "strategist",
+      title: "Bounded mission plan",
+      state: result("strategist").verdict === "block" ? "blocked" : "ready",
+      output: `${strategy.name}: ${objective.trim()} Strategy evidence: ${result("strategist").rationale}`,
+      evidenceRefs: evidence.market,
+    },
+    {
+      sequence: 3,
+      agent: "risk",
+      title: "Capital guardrails",
+      state: result("risk").verdict === "block" ? "blocked" : "ready",
+      output: `${result("risk").rationale} Live execution remains hard-locked.`,
+      evidenceRefs: evidence.council,
+    },
+    {
+      sequence: 4,
+      agent: "compliance",
+      title: "Evidence and policy gate",
+      state: result("compliance").verdict === "block" ? "blocked" : "ready",
+      output: result("compliance").rationale,
+      evidenceRefs: [...evidence.market, ...evidence.council],
+    },
+    {
+      sequence: 5,
+      agent: "executor",
+      title: "Paper execution handoff",
+      state: executionReady ? "ready" : "blocked",
+      output: executionReady
+        ? "A paper-only scenario may be prepared within the approved limits. No live order route exists."
+        : "Paper execution is withheld until every upstream blocking finding is resolved.",
+      evidenceRefs: [...evidence.execution, ...evidence.council],
+    },
+    {
+      sequence: 6,
+      agent: "auditor",
+      title: "Independent challenge",
+      state: reviewVerdict === "blocked" ? "blocked" : "ready",
+      output:
+        reviewVerdict === "pass"
+          ? `Audit passed with ${council.confidence}% evidence confidence and ${council.consensus}% agent consensus.`
+          : `Audit requires ${hardFindings.length} blocking item${hardFindings.length === 1 ? "" : "s"} to be resolved before owner approval.`,
+      evidenceRefs: [
+        ...evidence.market,
+        ...evidence.execution,
+        ...evidence.council,
+      ],
+    },
+  ];
+  const findings = [...hardFindings, ...concerns].slice(0, 20);
+  const status: AgentMission["status"] =
+    reviewVerdict === "pass" ? "owner_gate" : "revision_required";
+  const briefing = [
+    `Mission: ${objective.trim()}.`,
+    `Strategy: ${strategy.name} for ${strategy.symbol}.`,
+    `Council: ${council.recommendation.replace("_", " ")}, score ${council.score} out of 100, evidence confidence ${council.confidence} percent, consensus ${council.consensus} percent.`,
+    reviewVerdict === "pass"
+      ? "The independent audit passed. The mission is waiting for the owner's final decision."
+      : `The independent audit returned ${reviewVerdict}. ${hardFindings.join(" ")}`,
+    "All execution remains simulated and paper only.",
+  ].join(" ");
+
+  return agentMissionSchema.parse({
+    ...identity,
+    strategyId: strategy.id,
+    councilRunId: council.id,
+    engineVersion: "orbit-agent-operations-v2",
+    objective,
+    status,
+    steps,
+    review: { verdict: reviewVerdict, findings },
+    briefing,
+    ownerDecision: "pending",
+  });
+}
+
+export function decideAgentMission(
+  mission: AgentMission,
+  decision: "accepted" | "rejected",
+  decidedAt: string,
+): AgentMission {
+  if (mission.ownerDecision !== "pending")
+    throw Error("Mission already has an owner decision");
+  if (decision === "accepted" && mission.status !== "owner_gate")
+    throw Error("Only an audit-passed mission can be accepted");
+  return agentMissionSchema.parse({
+    ...mission,
+    status: decision,
+    ownerDecision: decision,
+    decidedAt,
   });
 }
 export function metrics(w: Workspace, currency = w.settings.currency) {
