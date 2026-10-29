@@ -1367,7 +1367,7 @@ export default function Studio({
               </>
             )}
             {view === "factory" && <BusinessFactory csrf={csrf} />}
-             {view === "agents" && (
+            {view === "agents" && (
               <>
                 <PageTitle
                   kicker="ORBIT NATIVE INTELLIGENCE / AGENT OPERATIONS V2"

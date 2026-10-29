@@ -8,7 +8,13 @@ import { z } from "zod";
 import { emptyWorkspace, workspaceSchema } from "../lib/domain.ts";
 import { digest, verifyPassword, validPasswordHash } from "./auth.ts";
 import { runCycle } from "../lib/ecomoda-core.mjs";
-import { createMission, startTask, submitArtifact, reviewTask, missionSummary } from "../lib/business-factory.mjs";
+import {
+  createMission,
+  startTask,
+  submitArtifact,
+  reviewTask,
+  missionSummary,
+} from "../lib/business-factory.mjs";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
@@ -59,7 +65,9 @@ export function createApplication(config: Config) {
   db.exec(
     "CREATE TABLE IF NOT EXISTS workspaces (owner_id TEXT PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS billing_events (event_id TEXT PRIMARY KEY, received_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS billing_subscriptions (customer_id TEXT PRIMARY KEY, subscription_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL, plan TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT NOT NULL);",
   );
-  db.exec("CREATE TABLE IF NOT EXISTS business_missions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)");
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS business_missions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)",
+  );
   db.prepare(
     "INSERT OR IGNORE INTO workspaces(owner_id,payload,revision) VALUES(?,?,0)",
   ).run("owner", JSON.stringify(emptyWorkspace()));
@@ -263,60 +271,114 @@ export function createApplication(config: Config) {
     res.json({ ok: true });
   });
 
-  const missionCreateSchema = z.object({
-    id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
-    goal: z.string().trim().min(1).max(2000),
-    customer: z.string().trim().min(1).max(2000),
-    maxCostCents: z.number().int().min(0).max(1000000).default(0),
-    maxMinutes: z.number().int().min(0).max(1000000).default(120),
-  }).strict();
-  const missionActionSchema = z.object({
-    revision: z.number().int().nonnegative(),
-    action: z.enum(["start", "submit", "review"]),
-    taskId: z.enum(["research", "offer", "economics", "quality", "sales", "content"]),
-    artifact: z.object({
-      kind: z.string().max(100), summary: z.string().min(1).max(2000),
-      evidence: z.array(z.string().min(1).max(2000)).max(20).default([]),
-      costCents: z.number().int().min(0).max(1000000).default(0),
-      minutes: z.number().int().min(0).max(1000000).default(0),
-    }).strict().optional(),
-    decision: z.object({approved: z.boolean(),note: z.string().min(1).max(2000)}).strict().optional()
-  }).strict();
+  const missionCreateSchema = z
+    .object({
+      id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
+      goal: z.string().trim().min(1).max(2000),
+      customer: z.string().trim().min(1).max(2000),
+      maxCostCents: z.number().int().min(0).max(1000000).default(0),
+      maxMinutes: z.number().int().min(0).max(1000000).default(120),
+    })
+    .strict();
+  const missionActionSchema = z
+    .object({
+      revision: z.number().int().nonnegative(),
+      action: z.enum(["start", "submit", "review"]),
+      taskId: z.enum([
+        "research",
+        "offer",
+        "economics",
+        "quality",
+        "sales",
+        "content",
+      ]),
+      artifact: z
+        .object({
+          kind: z.string().max(100),
+          summary: z.string().min(1).max(2000),
+          evidence: z.array(z.string().min(1).max(2000)).max(20).default([]),
+          costCents: z.number().int().min(0).max(1000000).default(0),
+          minutes: z.number().int().min(0).max(1000000).default(0),
+        })
+        .strict()
+        .optional(),
+      decision: z
+        .object({ approved: z.boolean(), note: z.string().min(1).max(2000) })
+        .strict()
+        .optional(),
+    })
+    .strict();
   app.get("/api/business/missions", auth, (_req, res) => {
-    const rows = db.prepare("SELECT payload FROM business_missions ORDER BY updated_at DESC LIMIT 100").all() as {payload:string}[];
-    res.json({missions: rows.map(row => {
-      const mission = JSON.parse(row.payload);
-      return {...mission, summary: missionSummary(mission)};
-    })});
+    const rows = db
+      .prepare(
+        "SELECT payload FROM business_missions ORDER BY updated_at DESC LIMIT 100",
+      )
+      .all() as { payload: string }[];
+    res.json({
+      missions: rows.map((row) => {
+        const mission = JSON.parse(row.payload);
+        return { ...mission, summary: missionSummary(mission) };
+      }),
+    });
   });
   app.post("/api/business/missions", auth, (req, res) => {
     const parsed = missionCreateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({error:"Invalid mission input"});
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid mission input" });
     const mission = createMission(parsed.data);
-    const result = db.prepare("INSERT OR IGNORE INTO business_missions(id,payload,revision,updated_at) VALUES(?,?,?,?)")
-      .run(mission.id, JSON.stringify(mission),mission.revision,new Date(now()).toISOString());
-    if (!result.changes) return res.status(409).json({error:"Mission already exists"});
-    res.status(201).json({mission});
+    const result = db
+      .prepare(
+        "INSERT OR IGNORE INTO business_missions(id,payload,revision,updated_at) VALUES(?,?,?,?)",
+      )
+      .run(
+        mission.id,
+        JSON.stringify(mission),
+        mission.revision,
+        new Date(now()).toISOString(),
+      );
+    if (!result.changes)
+      return res.status(409).json({ error: "Mission already exists" });
+    res.status(201).json({ mission });
   });
   app.post("/api/business/missions/:id/actions", auth, (req, res) => {
     const parsed = missionActionSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({error:"Invalid mission action"});
-    const row = db.prepare("SELECT payload,revision FROM business_missions WHERE id=?").get(req.params.id) as {payload:string,revision:number}|undefined;
-    if (!row) return res.status(404).json({error:"Mission not found"});
-    if (row.revision !== parsed.data.revision) return res.status(409).json({error:"Stale mission revision"});
-    const {action,taskId,artifact,decision,revision} = parsed.data;
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid mission action" });
+    const row = db
+      .prepare("SELECT payload,revision FROM business_missions WHERE id=?")
+      .get(req.params.id) as { payload: string; revision: number } | undefined;
+    if (!row) return res.status(404).json({ error: "Mission not found" });
+    if (row.revision !== parsed.data.revision)
+      return res.status(409).json({ error: "Stale mission revision" });
+    const { action, taskId, artifact, decision, revision } = parsed.data;
     let mission;
     try {
       const previous = JSON.parse(row.payload);
-      if (action === "start") mission = startTask(previous,taskId,revision);
-      else if (action === "submit" && artifact) mission = submitArtifact(previous,taskId,artifact,revision);
-      else if (action === "review" && decision) mission = reviewTask(previous,taskId,decision,revision);
-      else return res.status(400).json({error:"Missing action payload"});
-    } catch (e) { return res.status(400).json({error: e instanceof Error ? e.message : "Invalid transition"}); }
-    const changed = db.prepare("UPDATE business_missions SET payload=?,revision=?,updated_at=? WHERE id=? AND revision=?")
-      .run(JSON.stringify(mission),mission.revision,new Date(now()).toISOString(),req.params.id,revision);
-    if (!changed.changes) return res.status(409).json({error:"Concurrent mission update"});
-    res.json({mission,summary:missionSummary(mission)});
+      if (action === "start") mission = startTask(previous, taskId, revision);
+      else if (action === "submit" && artifact)
+        mission = submitArtifact(previous, taskId, artifact, revision);
+      else if (action === "review" && decision)
+        mission = reviewTask(previous, taskId, decision, revision);
+      else return res.status(400).json({ error: "Missing action payload" });
+    } catch (e) {
+      return res
+        .status(400)
+        .json({ error: e instanceof Error ? e.message : "Invalid transition" });
+    }
+    const changed = db
+      .prepare(
+        "UPDATE business_missions SET payload=?,revision=?,updated_at=? WHERE id=? AND revision=?",
+      )
+      .run(
+        JSON.stringify(mission),
+        mission.revision,
+        new Date(now()).toISOString(),
+        req.params.id,
+        revision,
+      );
+    if (!changed.changes)
+      return res.status(409).json({ error: "Concurrent mission update" });
+    res.json({ mission, summary: missionSummary(mission) });
   });
   app.get("/api/workspace", auth, (_req, res) => {
     const row = db
