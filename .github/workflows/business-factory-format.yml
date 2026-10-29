@@ -18,12 +18,12 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npx prettier --write docs/business-factory-v1.md lib/business-factory.mjs server/app.ts src/business-factory.tsx src/studio.tsx tests/business-factory.test.mjs
+      - run: npx prettier --write docs/business-factory-v1.md lib/business-factory.mjs server/app.ts src/business-factory.tsx src/studio.tsx tests/business-factory.test.mjs tests/business-factory-api.test.ts
       - name: Commit formatting to feature branch only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/business-factory-v1.md lib/business-factory.mjs server/app.ts src/business-factory.tsx src/studio.tsx tests/business-factory.test.mjs
+          git add docs/business-factory-v1.md lib/business-factory.mjs server/app.ts src/business-factory.tsx src/studio.tsx tests/business-factory.test.mjs tests/business-factory-api.test.ts
           if ! git diff --cached --quiet; then
             git commit -m "style: format Business Factory files"
             git push origin HEAD:feature/orbit-business-factory-v1
