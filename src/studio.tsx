@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import BusinessFactory from "./business-factory";
 import {
   Activity,
   Accessibility,
@@ -61,6 +62,7 @@ const nav = [
   ["strategies", "Strategies", BrainCircuit],
   ["backtests", "Backtesting", BarChart3],
   ["agents", "Agent network", Bot],
+  ["factory", "Business factory", CircleDollarSign],
   ["risk", "Risk control", ShieldCheck],
   ["ledger", "Paper ledger", WalletCards],
   ["trust", "Trust center", Scale],
@@ -1364,7 +1366,8 @@ export default function Studio({
                 )}
               </>
             )}
-            {view === "agents" && (
+            {view === "factory" && <BusinessFactory csrf={csrf} />}
+             {view === "agents" && (
               <>
                 <PageTitle
                   kicker="ORBIT NATIVE INTELLIGENCE / AGENT OPERATIONS V2"
