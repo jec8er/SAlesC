@@ -341,12 +341,13 @@ export function createApplication(config: Config) {
     res.status(201).json({ mission });
   });
   app.post("/api/business/missions/:id/actions", auth, (req, res) => {
+    const missionId = String(req.params.id);
     const parsed = missionActionSchema.safeParse(req.body);
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid mission action" });
     const row = db
       .prepare("SELECT payload,revision FROM business_missions WHERE id=?")
-      .get(req.params.id) as { payload: string; revision: number } | undefined;
+      .get(missionId) as { payload: string; revision: number } | undefined;
     if (!row) return res.status(404).json({ error: "Mission not found" });
     if (row.revision !== parsed.data.revision)
       return res.status(409).json({ error: "Stale mission revision" });
@@ -373,7 +374,7 @@ export function createApplication(config: Config) {
         JSON.stringify(mission),
         mission.revision,
         new Date(now()).toISOString(),
-        req.params.id,
+        missionId,
         revision,
       );
     if (!changed.changes)
