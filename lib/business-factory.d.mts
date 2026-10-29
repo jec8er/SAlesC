@@ -7,7 +7,14 @@ export type BusinessTask = {
   maxMinutes: number;
   actualCostCents: number;
   actualMinutes: number;
-  status: "pending" | "ready" | "running" | "review" | "completed" | "blocked" | "failed";
+  status:
+    | "pending"
+    | "ready"
+    | "running"
+    | "review"
+    | "completed"
+    | "blocked"
+    | "failed";
   artifact: null | { kind: string; summary: string; evidence: string[] };
   approval: null | { approved: boolean; note: string };
 };
@@ -28,11 +35,21 @@ export function createMission(options: {
   maxCostCents?: number;
   maxMinutes?: number;
 }): BusinessMission;
-export function startTask(mission: BusinessMission, taskId: string, expectedRevision: number): BusinessMission;
+export function startTask(
+  mission: BusinessMission,
+  taskId: string,
+  expectedRevision: number,
+): BusinessMission;
 export function submitArtifact(
   mission: BusinessMission,
   taskId: string,
-  artifact: { kind: string; summary: string; evidence?: string[]; costCents?: number; minutes?: number },
+  artifact: {
+    kind: string;
+    summary: string;
+    evidence?: string[];
+    costCents?: number;
+    minutes?: number;
+  },
   expectedRevision: number,
 ): BusinessMission;
 export function reviewTask(
