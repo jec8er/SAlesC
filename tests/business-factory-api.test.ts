@@ -51,6 +51,7 @@ test("business missions enforce authentication, CSRF, revision, and restart pers
       customer: "Small shop",
       maxCostCents: 600,
       maxMinutes: 120,
+      targetState: "CA",
     };
     assert.equal(
       (
@@ -124,11 +125,13 @@ test("business missions enforce authentication, CSRF, revision, and restart pers
     const result = (await stored.json()) as {
       missions: {
         id: string;
+        targetState: string;
         revision: number;
         tasks: { id: string; status: string }[];
       }[];
     };
     assert.equal(result.missions[0].id, "example");
+    assert.equal(result.missions[0].targetState, "CA");
     assert.equal(result.missions[0].revision, 1);
     assert.equal(result.missions[0].tasks[0].status, "running");
   } finally {

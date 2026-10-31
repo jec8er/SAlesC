@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { US_JURISDICTIONS } from "../lib/us-policy.mjs";
 type Task = {
   id: string;
   department: string;
@@ -12,8 +13,18 @@ type Mission = {
   id: string;
   goal: string;
   customer: string;
+  targetState?: string;
+  policyGate?: {
+    jurisdictionName: string;
+    activity: string;
+    requiredDocuments: string[];
+    requiredControls: string[];
+    hardBlockers: string[];
+    disclaimer: string;
+  };
   revision: number;
   tasks: Task[];
+  summary: { launchBlocked: boolean; launchBlockers: string[] };
 };
 export default function BusinessFactory({ csrf }: { csrf: string }) {
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -53,6 +64,10 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
       customer: String(fields.get("customer") || ""),
       maxCostCents: Math.round(Number(fields.get("budget") || 0) * 100),
       maxMinutes: Number(fields.get("minutes") || 120),
+      targetState: String(fields.get("targetState") || "NY"),
+      activity: String(fields.get("activity") || "general-commerce"),
+      sellsOrSharesPersonalData: fields.get("personalData") === "on",
+      usesAutomatedDecisions: true,
     });
   }
   function action(
@@ -69,9 +84,13 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
     if (kind === "submit") {
       const summary = window.prompt("Describe the completed artifact:");
       if (!summary) return;
+      const evidenceRequired = t.id === "research" || t.id === "policy";
       const source =
-        window.prompt("Evidence URL or reference (required for research):") ||
-        "";
+        window.prompt(
+          evidenceRequired
+            ? "Evidence URL or reference (required for this review):"
+            : "Evidence URL or reference (optional):",
+        ) || "";
       payload.artifact = {
         kind: t.expectedArtifact,
         summary,
@@ -124,6 +143,29 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
           />
         </label>
         <label>
+          U.S. launch state{" "}
+          <select name="targetState" defaultValue="NY" required>
+            {US_JURISDICTIONS.map((state) => (
+              <option key={state.code} value={state.code}>
+                {state.name} ({state.code})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Business activity{" "}
+          <select name="activity" defaultValue="general-commerce" required>
+            <option value="general-commerce">General commerce</option>
+            <option value="financial-education">Financial education</option>
+            <option value="investment-advice">Investment advice</option>
+            <option value="children-directed">Directed to children</option>
+          </select>
+        </label>
+        <label>
+          <input name="personalData" type="checkbox" /> Sell or share personal
+          data
+        </label>
+        <label>
           Budget ($){" "}
           <input
             name="budget"
@@ -160,6 +202,41 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
             <p>
               Customer: {m.customer} · Revision {m.revision}
             </p>
+            <p>
+              U.S. policy scope:{" "}
+              {m.policyGate
+                ? `${m.policyGate.jurisdictionName} (${m.targetState}) · ${m.policyGate.activity}`
+                : "Legacy mission — create a new mission for a state-specific review"}
+            </p>
+            <p role="status">
+              Launch gate: {m.summary.launchBlocked ? "BLOCKED" : "APPROVED"}
+              {m.summary.launchBlocked &&
+                ` — ${m.summary.launchBlockers.join(", ")}`}
+            </p>
+            {m.policyGate && (
+              <details>
+                <summary>Required U.S. policy package</summary>
+                <p>{m.policyGate.disclaimer}</p>
+                <strong>Documents</strong>
+                <ul>
+                  {m.policyGate.requiredDocuments.map((document) => (
+                    <li key={document}>{document}</li>
+                  ))}
+                </ul>
+                <strong>Controls</strong>
+                <ul>
+                  {m.policyGate.requiredControls.map((control) => (
+                    <li key={control}>{control}</li>
+                  ))}
+                </ul>
+                {m.policyGate.hardBlockers.length > 0 && (
+                  <p>
+                    Specialized review required:{" "}
+                    {m.policyGate.hardBlockers.join(", ")}
+                  </p>
+                )}
+              </details>
+            )}
             {m.tasks.map((t) => (
               <div
                 key={t.id}

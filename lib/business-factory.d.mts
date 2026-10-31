@@ -22,6 +22,8 @@ export type BusinessMission = {
   id: string;
   goal: string;
   customer: string;
+  targetState: string;
+  policyGate: import("./us-policy.mjs").UsPolicyGate;
   maxCostCents: number;
   maxMinutes: number;
   revision: number;
@@ -34,6 +36,10 @@ export function createMission(options: {
   customer: string;
   maxCostCents?: number;
   maxMinutes?: number;
+  targetState?: string;
+  activity?: import("./us-policy.mjs").UsActivity;
+  sellsOrSharesPersonalData?: boolean;
+  usesAutomatedDecisions?: boolean;
 }): BusinessMission;
 export function startTask(
   mission: BusinessMission,
@@ -65,4 +71,6 @@ export function missionSummary(mission: BusinessMission): {
   spentCostCents: number;
   spentMinutes: number;
   finished: boolean;
+  launchBlocked: boolean;
+  launchBlockers: string[];
 };

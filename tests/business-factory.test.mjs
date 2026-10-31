@@ -16,13 +16,95 @@ test("commercial mission starts with research only and blocks dependencies", () 
     maxCostCents: 600,
     maxMinutes: 120,
   });
-  assert.equal(m.tasks.length, 6);
+  assert.equal(m.tasks.length, 7);
   assert.deepEqual(
     m.tasks.filter((t) => t.status === "ready").map((t) => t.id),
     ["research"],
   );
   assert.throws(() => startTask(m, "offer", 0), /not ready/);
   assert.throws(() => startTask(m, "research", 1), /Stale/);
+});
+test("U.S. policy review blocks quality and launch until human approval", () => {
+  let m = createMission({
+    id: "pilot_policy",
+    goal: "Validate a U.S. offer",
+    customer: "California merchants",
+    maxCostCents: 700,
+    maxMinutes: 140,
+    targetState: "CA",
+  });
+  assert.equal(m.targetState, "CA");
+  assert.equal(missionSummary(m).launchBlocked, true);
+
+  m = startTask(m, "research", m.revision);
+  m = submitArtifact(
+    m,
+    "research",
+    {
+      kind: "market-evidence",
+      summary: "Consented customer interview",
+      evidence: ["interview:case-1"],
+    },
+    m.revision,
+  );
+  m = reviewTask(
+    m,
+    "research",
+    { approved: true, note: "Evidence verified" },
+    m.revision,
+  );
+  m = startTask(m, "offer", m.revision);
+  m = submitArtifact(
+    m,
+    "offer",
+    { kind: "offer-draft", summary: "Bounded offer" },
+    m.revision,
+  );
+  m = reviewTask(
+    m,
+    "offer",
+    { approved: true, note: "Offer verified" },
+    m.revision,
+  );
+  assert.equal(m.tasks.find((t) => t.id === "policy").status, "ready");
+  assert.equal(m.tasks.find((t) => t.id === "quality").status, "pending");
+
+  m = startTask(m, "policy", m.revision);
+  m = submitArtifact(
+    m,
+    "policy",
+    { kind: "us-policy-review", summary: "California review complete" },
+    m.revision,
+  );
+  assert.throws(
+    () =>
+      reviewTask(m, "policy", { approved: true, note: "Reviewed" }, m.revision),
+    /linked evidence/,
+  );
+  m = reviewTask(
+    {
+      ...m,
+      tasks: m.tasks.map((task) =>
+        task.id === "policy"
+          ? {
+              ...task,
+              artifact: { ...task.artifact, evidence: ["counsel:review-1"] },
+            }
+          : task,
+      ),
+    },
+    "policy",
+    { approved: true, note: "State addendum reviewed" },
+    m.revision,
+  );
+  assert.equal(
+    missionSummary(m).launchBlockers.includes("us-policy-review-not-approved"),
+    false,
+  );
+  assert.equal(
+    missionSummary(m).launchBlockers.includes("mission-workflow-not-complete"),
+    true,
+  );
 });
 test("evidence and owner review unlock dependent tasks without external effects", () => {
   let m = createMission({
