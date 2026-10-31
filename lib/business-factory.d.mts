@@ -15,13 +15,27 @@ export type BusinessTask = {
     | "completed"
     | "blocked"
     | "failed";
-  artifact: null | { kind: string; summary: string; evidence: string[] };
+  artifact: null | {
+    kind: string;
+    summary: string;
+    evidence: string[];
+    policyReview?: {
+      reviewerName: string;
+      reviewerRole: "owner" | "compliance-professional" | "licensed-attorney";
+      reviewedAt: string;
+      completedDocuments: string[];
+      completedControls: string[];
+      resolvedBlockers: string[];
+    };
+  };
   approval: null | { approved: boolean; note: string };
 };
 export type BusinessMission = {
   id: string;
   goal: string;
   customer: string;
+  targetState: string;
+  policyGate: import("./us-policy.mjs").UsPolicyGate;
   maxCostCents: number;
   maxMinutes: number;
   revision: number;
@@ -34,6 +48,10 @@ export function createMission(options: {
   customer: string;
   maxCostCents?: number;
   maxMinutes?: number;
+  targetState?: string;
+  activity?: import("./us-policy.mjs").UsActivity;
+  sellsOrSharesPersonalData?: boolean;
+  usesAutomatedDecisions?: boolean;
 }): BusinessMission;
 export function startTask(
   mission: BusinessMission,
@@ -49,6 +67,14 @@ export function submitArtifact(
     evidence?: string[];
     costCents?: number;
     minutes?: number;
+    policyReview?: {
+      reviewerName: string;
+      reviewerRole: "owner" | "compliance-professional" | "licensed-attorney";
+      reviewedAt: string;
+      completedDocuments: string[];
+      completedControls: string[];
+      resolvedBlockers: string[];
+    };
   },
   expectedRevision: number,
 ): BusinessMission;
@@ -65,4 +91,6 @@ export function missionSummary(mission: BusinessMission): {
   spentCostCents: number;
   spentMinutes: number;
   finished: boolean;
+  launchBlocked: boolean;
+  launchBlockers: string[];
 };
