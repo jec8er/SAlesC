@@ -15,7 +15,19 @@ export type BusinessTask = {
     | "completed"
     | "blocked"
     | "failed";
-  artifact: null | { kind: string; summary: string; evidence: string[] };
+  artifact: null | {
+    kind: string;
+    summary: string;
+    evidence: string[];
+    policyReview?: {
+      reviewerName: string;
+      reviewerRole: "owner" | "compliance-professional" | "licensed-attorney";
+      reviewedAt: string;
+      completedDocuments: string[];
+      completedControls: string[];
+      resolvedBlockers: string[];
+    };
+  };
   approval: null | { approved: boolean; note: string };
 };
 export type BusinessMission = {
@@ -55,6 +67,14 @@ export function submitArtifact(
     evidence?: string[];
     costCents?: number;
     minutes?: number;
+    policyReview?: {
+      reviewerName: string;
+      reviewerRole: "owner" | "compliance-professional" | "licensed-attorney";
+      reviewedAt: string;
+      completedDocuments: string[];
+      completedControls: string[];
+      resolvedBlockers: string[];
+    };
   },
   expectedRevision: number,
 ): BusinessMission;

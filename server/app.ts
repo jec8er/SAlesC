@@ -315,6 +315,21 @@ export function createApplication(config: Config) {
           evidence: z.array(z.string().min(1).max(2000)).max(20).default([]),
           costCents: z.number().int().min(0).max(1000000).default(0),
           minutes: z.number().int().min(0).max(1000000).default(0),
+          policyReview: z
+            .object({
+              reviewerName: z.string().trim().min(1).max(2000),
+              reviewerRole: z.enum([
+                "owner",
+                "compliance-professional",
+                "licensed-attorney",
+              ]),
+              reviewedAt: z.string().datetime(),
+              completedDocuments: z.array(z.string().min(1).max(200)).max(50),
+              completedControls: z.array(z.string().min(1).max(200)).max(50),
+              resolvedBlockers: z.array(z.string().min(1).max(200)).max(50),
+            })
+            .strict()
+            .optional(),
         })
         .strict()
         .optional(),

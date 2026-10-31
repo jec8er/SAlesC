@@ -18,6 +18,12 @@ Every new mission records:
 
 Legacy missions without this metadata remain launch-blocked.
 
+The policy artifact is a structured dossier. It records the reviewer name and
+role, review date, each completed document, each verified operational control,
+resolved specialized blockers, and at least one evidence reference. A free-form
+note alone cannot satisfy the gate. Final approval requires a reviewer recorded
+as a licensed attorney.
+
 ## Required baseline documents
 
 1. Privacy notice.
@@ -48,7 +54,9 @@ approved.
 
 ## Hard blockers
 
-ORBIT will not approve the policy task when a mission is classified as:
+ORBIT will not approve the policy task when a mission is classified as the
+following unless the matching blocker is explicitly resolved in an
+attorney-reviewed dossier:
 
 - `children-directed`, until COPPA parental-consent and counsel review is
   resolved outside ORBIT; or

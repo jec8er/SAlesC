@@ -5,7 +5,18 @@ type Task = {
   department: string;
   status: string;
   expectedArtifact: string;
-  artifact: null | { summary: string };
+  artifact: null | {
+    summary: string;
+    evidence: string[];
+    policyReview?: {
+      reviewerName: string;
+      reviewerRole: string;
+      reviewedAt: string;
+      completedDocuments: string[];
+      completedControls: string[];
+      resolvedBlockers: string[];
+    };
+  };
   maxCostCents: number;
   maxMinutes: number;
 };
@@ -26,6 +37,128 @@ type Mission = {
   tasks: Task[];
   summary: { launchBlocked: boolean; launchBlockers: string[] };
 };
+
+function PolicyReviewForm({
+  mission,
+  task,
+  busy,
+  submit,
+}: {
+  mission: Mission;
+  task: Task;
+  busy: boolean;
+  submit: (artifact: Record<string, unknown>) => void;
+}) {
+  const gate = mission.policyGate;
+  if (!gate)
+    return <p>Policy metadata is missing. This mission stays blocked.</p>;
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const fields = new FormData(event.currentTarget);
+        const date = String(fields.get("reviewedAt") || "");
+        submit({
+          kind: task.expectedArtifact,
+          summary: String(fields.get("summary") || ""),
+          evidence: [String(fields.get("evidence") || "")],
+          costCents: 0,
+          minutes: 0,
+          policyReview: {
+            reviewerName: String(fields.get("reviewerName") || ""),
+            reviewerRole: String(fields.get("reviewerRole") || "owner"),
+            reviewedAt: new Date(`${date}T12:00:00.000Z`).toISOString(),
+            completedDocuments: fields.getAll("completedDocuments"),
+            completedControls: fields.getAll("completedControls"),
+            resolvedBlockers: fields.getAll("resolvedBlockers"),
+          },
+        });
+      }}
+      style={{ display: "grid", gap: 10, marginTop: 12 }}
+    >
+      <strong>Structured U.S. policy review</strong>
+      <label>
+        Review summary <input name="summary" required maxLength={2000} />
+      </label>
+      <label>
+        Reviewer name <input name="reviewerName" required maxLength={2000} />
+      </label>
+      <label>
+        Reviewer role{" "}
+        <select name="reviewerRole" defaultValue="owner" required>
+          <option value="owner">Owner — preparation only</option>
+          <option value="compliance-professional">
+            Compliance professional — preparation only
+          </option>
+          <option value="licensed-attorney">
+            Licensed attorney — required for approval
+          </option>
+        </select>
+      </label>
+      <label>
+        Review date{" "}
+        <input
+          name="reviewedAt"
+          type="date"
+          defaultValue={new Date().toISOString().slice(0, 10)}
+          required
+        />
+      </label>
+      <fieldset>
+        <legend>Documents reviewed</legend>
+        {gate.requiredDocuments.map((item) => (
+          <label key={item} style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              name="completedDocuments"
+              value={item}
+              required
+            />{" "}
+            {item}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset>
+        <legend>Operational controls verified</legend>
+        {gate.requiredControls.map((item) => (
+          <label key={item} style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              name="completedControls"
+              value={item}
+              required
+            />{" "}
+            {item}
+          </label>
+        ))}
+      </fieldset>
+      {gate.hardBlockers.length > 0 && (
+        <fieldset>
+          <legend>Specialized blockers resolved</legend>
+          {gate.hardBlockers.map((item) => (
+            <label key={item} style={{ display: "block" }}>
+              <input
+                type="checkbox"
+                name="resolvedBlockers"
+                value={item}
+                required
+              />{" "}
+              {item}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <label>
+        Evidence URL or internal reference{" "}
+        <input name="evidence" required maxLength={2000} />
+      </label>
+      <button disabled={busy} type="submit">
+        Submit policy dossier
+      </button>
+    </form>
+  );
+}
+
 export default function BusinessFactory({ csrf }: { csrf: string }) {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [error, setError] = useState("");
@@ -107,6 +240,21 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
     void write(
       "/api/business/missions/" + encodeURIComponent(m.id) + "/actions",
       payload,
+    );
+  }
+  function submitPolicyReview(
+    mission: Mission,
+    task: Task,
+    artifact: Record<string, unknown>,
+  ) {
+    void write(
+      "/api/business/missions/" + encodeURIComponent(mission.id) + "/actions",
+      {
+        revision: mission.revision,
+        action: "submit",
+        taskId: task.id,
+        artifact,
+      },
     );
   }
   return (
@@ -251,12 +399,29 @@ export default function BusinessFactory({ csrf }: { csrf: string }) {
                   {(t.maxCostCents / 100).toFixed(2)} USD / {t.maxMinutes} min
                 </p>
                 {t.artifact && <p>Artifact: {t.artifact.summary}</p>}
+                {t.artifact?.policyReview && (
+                  <p>
+                    Review: {t.artifact.policyReview.reviewerName} ·{" "}
+                    {t.artifact.policyReview.reviewerRole} ·{" "}
+                    {new Date(
+                      t.artifact.policyReview.reviewedAt,
+                    ).toLocaleDateString()}
+                  </p>
+                )}
                 {t.status === "ready" && (
                   <button disabled={busy} onClick={() => action(m, t, "start")}>
                     Start
                   </button>
                 )}
-                {t.status === "running" && (
+                {t.status === "running" && t.id === "policy" && (
+                  <PolicyReviewForm
+                    mission={m}
+                    task={t}
+                    busy={busy}
+                    submit={(artifact) => submitPolicyReview(m, t, artifact)}
+                  />
+                )}
+                {t.status === "running" && t.id !== "policy" && (
                   <button
                     disabled={busy}
                     onClick={() => action(m, t, "submit")}

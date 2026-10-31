@@ -70,10 +70,22 @@ test("U.S. policy review blocks quality and launch until human approval", () => 
   assert.equal(m.tasks.find((t) => t.id === "quality").status, "pending");
 
   m = startTask(m, "policy", m.revision);
+  const policyReview = {
+    reviewerName: "Jane Counsel",
+    reviewerRole: "licensed-attorney",
+    reviewedAt: "2026-10-31T12:00:00.000Z",
+    completedDocuments: [...m.policyGate.requiredDocuments],
+    completedControls: [...m.policyGate.requiredControls],
+    resolvedBlockers: [...m.policyGate.hardBlockers],
+  };
   m = submitArtifact(
     m,
     "policy",
-    { kind: "us-policy-review", summary: "California review complete" },
+    {
+      kind: "us-policy-review",
+      summary: "California review complete",
+      policyReview,
+    },
     m.revision,
   );
   assert.throws(
@@ -105,6 +117,79 @@ test("U.S. policy review blocks quality and launch until human approval", () => 
     missionSummary(m).launchBlockers.includes("mission-workflow-not-complete"),
     true,
   );
+});
+test("specialized blockers require explicit attorney-backed resolution", () => {
+  let m = createMission({
+    id: "pilot_advice",
+    goal: "Evaluate an advisory offer",
+    customer: "Texas investors",
+    targetState: "TX",
+    activity: "investment-advice",
+  });
+  m = {
+    ...m,
+    tasks: m.tasks.map((task) =>
+      task.id === "policy" ? { ...task, status: "running" } : task,
+    ),
+  };
+  const baseReview = {
+    reviewerName: "Jane Counsel",
+    reviewerRole: "licensed-attorney",
+    reviewedAt: "2026-10-31T12:00:00.000Z",
+    completedDocuments: [...m.policyGate.requiredDocuments],
+    completedControls: [...m.policyGate.requiredControls],
+    resolvedBlockers: [],
+  };
+  m = submitArtifact(
+    m,
+    "policy",
+    {
+      kind: "us-policy-review",
+      summary: "Registration analysis attached",
+      evidence: ["legal-memo:registration-1"],
+      policyReview: baseReview,
+    },
+    m.revision,
+  );
+  assert.throws(
+    () =>
+      reviewTask(
+        m,
+        "policy",
+        { approved: true, note: "Counsel reviewed" },
+        m.revision,
+      ),
+    /unresolved specialized-review blockers/,
+  );
+  const blocker = m.policyGate.hardBlockers[0];
+  m = {
+    ...m,
+    tasks: m.tasks.map((task) =>
+      task.id === "policy"
+        ? {
+            ...task,
+            artifact: {
+              ...task.artifact,
+              policyReview: {
+                ...task.artifact.policyReview,
+                resolvedBlockers: [blocker],
+              },
+            },
+          }
+        : task,
+    ),
+  };
+  m = reviewTask(
+    m,
+    "policy",
+    { approved: true, note: "Registration obligation resolved" },
+    m.revision,
+  );
+  assert.equal(
+    m.tasks.find((task) => task.id === "policy").status,
+    "completed",
+  );
+  assert.equal(missionSummary(m).launchBlockers.includes(blocker), false);
 });
 test("evidence and owner review unlock dependent tasks without external effects", () => {
   let m = createMission({
