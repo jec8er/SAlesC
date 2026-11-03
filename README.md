@@ -1,5 +1,20 @@
 # ORBIT
 
+## Direction update — November 3, 2026
+
+ORBIT now opens on a Spanish operations home: stored commercial missions,
+completed-task counts, launch blockers and a pilot-planning form for a small
+cleaning business. The form persists through the existing authenticated mission
+API; it does not execute tasks, contact customers or collect money. Existing
+market research and paper simulation remain available in their separate views.
+
+The product hypothesis is a private workspace for building and delivering one
+repeatable business service with minimal owner intervention. The first proposed
+service is inquiry, quote and follow-up organization. Buyer demand, delivery
+capacity and pricing remain unvalidated. See `docs/orbit-refinement.md` for scope,
+the autonomy boundary and the ten-step roadmap. The market-laboratory description
+below documents the retained implementation, rather than the new commercial offer.
+
 A standalone agentic market laboratory for jec8er. ORBIT coordinates research, strategy, risk, compliance, paper execution and audit in one private workspace. Its native intelligence engine reasons from stored evidence without OpenAI, an external model API or a cloud inference dependency. It runs directly from this GitHub repository with **React + Vite, Express and SQLite**.
 
 ## Start locally (Windows, macOS or Linux)
