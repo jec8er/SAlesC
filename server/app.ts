@@ -17,6 +17,7 @@ import {
 } from "../lib/business-factory.mjs";
 import { jurisdictionByCode } from "../lib/us-policy.mjs";
 import { mountServiceDesk } from "./service-desk.ts";
+import { mountQuoteStore } from "./quote-store.ts";
 import { LocalInferenceUnavailable } from "./local-inference.ts";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
@@ -153,6 +154,7 @@ export function createApplication(config: Config) {
       }
     },
   );
+  mountQuoteStore(app, db, config.publicOrigin);
   app.use(express.json({ limit: "350kb", strict: true }));
   const cookieName = "sc_session";
   function token(req: Request) {
