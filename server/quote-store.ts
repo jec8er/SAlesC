@@ -134,9 +134,10 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
   db.exec(`CREATE TABLE IF NOT EXISTS quote_kit_order_sources (
     order_id TEXT PRIMARY KEY REFERENCES quote_kit_orders(id), source TEXT NOT NULL
   );
-  CREATE TRIGGER IF NOT EXISTS quote_kit_count_purchase
+  DROP TRIGGER IF EXISTS quote_kit_count_purchase;
+  CREATE TRIGGER quote_kit_count_purchase
   AFTER UPDATE OF paid ON quote_kit_orders
-  WHEN OLD.paid = 0 AND NEW.paid = 1
+  WHEN OLD.paid <> 1 AND NEW.paid = 1
   BEGIN
     INSERT INTO quote_kit_metrics VALUES (
       COALESCE((SELECT source FROM quote_kit_order_sources WHERE order_id = NEW.id), 'direct'),
@@ -161,14 +162,19 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
       if (
         event.livemode ||
         (event.type !== "checkout.session.completed" &&
-          event.type !== "checkout.session.async_payment_succeeded")
+          event.type !== "checkout.session.async_payment_succeeded" &&
+          event.type !== "checkout.session.async_payment_failed" &&
+          event.type !== "checkout.session.expired")
       )
         return res.sendStatus(204);
       const session = event.data.object;
+      const failed =
+        event.type === "checkout.session.async_payment_failed" ||
+        event.type === "checkout.session.expired";
       if (
         session.metadata?.product !== "orbit-quote-kit" ||
         session.mode !== "payment" ||
-        session.payment_status !== "paid" ||
+        (!failed && session.payment_status !== "paid") ||
         session.amount_total !== amount ||
         session.currency !== "usd" ||
         !session.metadata.order
@@ -176,9 +182,9 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
         return res.sendStatus(204);
       const result = db
         .prepare(
-          "UPDATE quote_kit_orders SET paid=1 WHERE id=? AND session_id=?",
+          "UPDATE quote_kit_orders SET paid=CASE WHEN paid=1 THEN 1 ELSE ? END WHERE id=? AND session_id=?",
         )
-        .run(session.metadata.order, session.id);
+        .run(failed ? -1 : 1, session.metadata.order, session.id);
       return res.sendStatus(result.changes ? 204 : 503);
     },
   );
@@ -252,14 +258,16 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
       .prepare("SELECT paid FROM quote_kit_orders WHERE id=? AND grant_hash=?")
       .get(req.params.id, digest(grant));
     if (!order) return res.sendStatus(404);
-    if (order.paid && req.query.download === "1")
+    if (order.paid === 1 && req.query.download === "1")
       return res.download(kit, "ORBIT-Quote-Kit.html");
     return res.send(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Quote Kit order</title>
-      ${order.paid ? "" : '<meta http-equiv="refresh" content="5">'}
+      ${order.paid === 0 ? '<meta http-equiv="refresh" content="5">' : ""}
       <h1>Quote Kit order</h1>${
-        order.paid
+        order.paid === 1
           ? '<p><a href="?download=1">Download the Quote Kit</a></p>'
-          : "<p>Awaiting payment confirmation. This page checks automatically. Keep it open to get your download link.</p>"
+          : order.paid === -1
+            ? '<p>Payment did not complete. <a href="/store/quote-kit">Return to the storefront to try again.</a></p>'
+            : "<p>Awaiting payment confirmation. This page checks automatically. Keep it open to get your download link.</p>"
       }</html>`);
   });
 }

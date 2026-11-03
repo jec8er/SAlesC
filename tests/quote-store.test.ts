@@ -53,9 +53,14 @@ test("only a signed matching paid test session unlocks the buyer's download", as
   );
   const download = origin + "/store/quote-kit/order/order?download=1";
   const buyer = { cookie: "orbit_quote_grant=" + grant };
-  const send = (status: string, amount: number, signed = true) => {
+  const send = (
+    status: string,
+    amount: number,
+    signed = true,
+    type = "checkout.session.completed",
+  ) => {
     const payload = JSON.stringify({
-      type: "checkout.session.completed",
+      type,
       livemode: false,
       data: {
         object: {
@@ -86,6 +91,13 @@ test("only a signed matching paid test session unlocks the buyer's download", as
     await (await fetch(download, { headers: buyer })).text(),
     /Awaiting payment/,
   );
+  assert.equal(
+    (await send("unpaid", 1900, true, "checkout.session.expired")).status,
+    204,
+  );
+  const expired = await (await fetch(download, { headers: buyer })).text();
+  assert.match(expired, /Payment did not complete/);
+  assert.doesNotMatch(expired, /http-equiv="refresh"/);
   assert.equal((await send("paid", 1900)).status, 204);
   assert.equal((await send("paid", 1900)).status, 204);
   assert.equal(
