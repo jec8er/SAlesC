@@ -16,7 +16,8 @@ export const trustControls: readonly TrustControl[] = [
     category: "privacy",
     title: "Publish a reviewed privacy policy",
     status: "professional_review",
-    evidence: "Required before collecting data from customers.",
+    evidence:
+      "docs/policies.md contains an English draft; operator details, data inventory and professional review remain pending before customer collection.",
   },
   {
     id: "terms",
@@ -24,14 +25,15 @@ export const trustControls: readonly TrustControl[] = [
     title: "Publish reviewed terms of service",
     status: "professional_review",
     evidence:
-      "Product scope, acceptable use and dispute terms need owner and counsel input.",
+      "docs/policies.md documents proposed scope and acceptable use; operator identity, customer orders and dispute terms still need owner and counsel review.",
   },
   {
     id: "refunds",
     category: "business",
     title: "Define refund and cancellation rules",
     status: "owner_action",
-    evidence: "Required before activating a paid offer or checkout.",
+    evidence:
+      "docs/policies.md proposes cancellation and unearned-fee refunds; owner approval and a tested subscription cancellation process remain pending.",
   },
   {
     id: "cookies",
@@ -69,17 +71,17 @@ export const trustControls: readonly TrustControl[] = [
     id: "vendors",
     category: "privacy",
     title: "Audit third-party SDKs and vendors",
-    status: "verified",
+    status: "owner_action",
     evidence:
-      "Runtime dependencies are Express, React, Lucide and Zod; no advertising, analytics, broker or hosted-model SDK is present.",
+      "Stripe is installed and checkout/webhooks exist. Inventory deployed billing data, infrastructure and any external inference adapter before launch; SDK absence does not establish absence of data transfers.",
   },
   {
     id: "dark-patterns",
     category: "fairness",
     title: "Avoid dark patterns",
-    status: "verified",
+    status: "owner_action",
     evidence:
-      "No checkout, subscription enrollment, pre-checked consent or forced continuity exists.",
+      "src/App.tsx exposes subscription checkout when configured. Verify full price and renewal disclosures, affirmative agreement and a working cancellation path before activation.",
   },
   {
     id: "fees",
@@ -150,7 +152,7 @@ export const trustControls: readonly TrustControl[] = [
     title: "Document export, correction and deletion",
     status: "owner_action",
     evidence:
-      "Workspace export exists in the UI; retention and deletion procedures still need publication.",
+      "Workspace export exists; docs/policies.md describes request and retention requirements. Monitored contacts, deadlines assessment and complete deletion/backup procedures remain pending.",
   },
   {
     id: "headers",
@@ -166,7 +168,7 @@ export const trustControls: readonly TrustControl[] = [
     title: "Create an incident-response and breach plan",
     status: "owner_action",
     evidence:
-      "Technical controls exist, but escalation, notification and recovery owners are not documented.",
+      "docs/policies.md contains a draft incident procedure; incident contacts, notification assessment and recovery drills must be completed for the deployed service.",
   },
 ] as const;
 
