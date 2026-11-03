@@ -24,16 +24,49 @@ export function mountQuoteStore(
   const enabled = Boolean(
     origin && secret && key && /^(sk|rk)_test_/.test(key),
   );
-  app.get("/store/quote-kit", (_req, res) => {
+  app.get("/store/quote-kit", (req, res) => {
     res.set(
       "Content-Security-Policy",
-      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
+      "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
     );
+    const cost = Number(
+      typeof req.query.cost === "string" ? req.query.cost : 200,
+    );
+    const margin = Number(
+      typeof req.query.margin === "string" ? req.query.margin : 25,
+    );
+    const valid =
+      Number.isFinite(cost) &&
+      cost >= 0 &&
+      cost <= 100000 &&
+      Number.isFinite(margin) &&
+      margin >= 0 &&
+      margin <= 99;
+    const dollars = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+    const price = valid
+      ? dollars.format(
+          Math.ceil(
+            (Math.round(cost * 100) * 10000) /
+              (10000 - Math.round(margin * 100)),
+          ) / 100,
+        )
+      : "";
     res.set("Cache-Control", "no-store")
       .send(`<!doctype html><html lang="en"><meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>ORBIT Quote Kit</title><main><h1>ORBIT Quote Kit</h1>
+      <title>ORBIT Quote Kit</title>
+      <style>body{margin:0;background:#eff5f2;color:#183329;font:17px/1.55 system-ui}main{max-width:42rem;margin:3rem auto;padding:1.5rem}section{background:white;border-radius:1rem;padding:1.5rem;margin:1.5rem 0}label{display:block;margin:.75rem 0}input,button{font:inherit;padding:.45rem}button{background:#165a48;color:white;border:0;border-radius:.4rem;cursor:pointer}</style>
+      <main><h1>ORBIT Quote Kit</h1>
       <p>Price cleaning jobs, print customer quotes, and track follow-ups.</p>
+      <section><h2>Try the price calculator</h2>
+      <form method="get" action="/store/quote-kit">
+      <label>Total job cost (USD) <input name="cost" type="number" min="0" max="100000" step=".01" required value="${valid ? cost : 200}"></label>
+      <label>Target margin (%) <input name="margin" type="number" min="0" max="99" step=".01" required value="${valid ? margin : 25}"></label>
+      <button>Calculate price</button></form>
+      <p role="status">${valid ? "Suggested price before tax: " + price : "Enter a valid job cost and a margin from 0% to 99%."}</p></section>
       ${enabled ? "<p>Test checkout · USD 19 · No real charge</p>" : "<p>Checkout is currently unavailable.</p>"}
       ${enabled ? '<form method="post" action="/api/quote-kit/checkout"><button>Start test checkout</button></form>' : ""}
       </main></html>`);
