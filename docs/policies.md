@@ -16,7 +16,9 @@ evidence and reviewing results. The operator manages owner account and service
 administration data. If a customer later instructs the operator to process inquiry
 or quote data on its behalf, the parties must first document their respective
 roles, permitted purposes, security measures and service-provider obligations.
-The proposed customer-facing inquiry service is not yet implemented.
+The owner-only service desk now stores manually entered inquiries, quote versions,
+owner approvals and internal follow-up tasks. Public inquiry collection, customer
+accounts, automated sending and customer quote acceptance are not implemented.
 
 ### Information and purposes
 
@@ -24,7 +26,9 @@ The current application stores a salted owner-password hash, sessions, workspace
 records, mission descriptions, customer labels, evidence references, review
 decisions and operational histories in local storage files and SQLite databases.
 Project memory and cycle checkpoints may also store submitted task context and
-generated outputs. Use these records only to provide, secure, troubleshoot and
+generated outputs. Service desk records may include customer labels, contact
+references, service requests, price/scope versions, follow-up dates and an activity
+history. Use these records only to provide, secure, troubleshoot and
 document the requested work. Do not enter passwords, payment-card numbers,
 government identifiers, health data, access codes or unnecessary household details
 in mission text or evidence. A customer label can itself identify a person.
@@ -41,8 +45,12 @@ processed by Stripe; ORBIT records the billing information and event identifiers
 needed by its configured integration. Do not enter card details into ORBIT forms.
 The operator must verify and disclose the exact deployed billing data inventory.
 
-The local scoring engine does not call a hosted language model. A separate cycle
-engine can receive an externally configured inference adapter. Before connecting
+The local scoring engine does not call a hosted language model. The optional local
+model team runs the primary and reviewer on the configured host and processes task
+text in private temporary prompt files. Outputs/checkpoints remain in private
+runtime storage; authenticated owners can retrieve artifacts. This local adapter
+does not send prompts to an external inference service. A separate cycle
+engine can also receive an externally configured inference adapter. Before connecting
 one, identify the provider, data sent, retention, training settings, subprocessors
 and contractual protections. Do not send customer information to a model without
 the necessary customer instructions and applicable authorization. Provider terms

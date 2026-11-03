@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import BusinessFactory from "./business-factory";
 import OperationsHome from "./operations-home";
+import ServiceDesk from "./service-desk";
+import ModelWorkbench from "./model-workbench";
 import {
   Activity,
   Accessibility,
@@ -60,6 +62,8 @@ import {
 
 const nav = [
   ["operations", "Operations home", ListChecks],
+  ["service", "Service desk", CircleDollarSign],
+  ["models", "Model team", BrainCircuit],
   ["command", "Command center", Orbit],
   ["strategies", "Strategies", BrainCircuit],
   ["backtests", "Backtesting", BarChart3],
@@ -821,23 +825,26 @@ export default function Studio({
           </div>
           <div className="header-actions">
             <span>{busy ? "SAVING" : loaded ? "SYNCED" : "CONNECTING"}</span>
-            {view !== "operations" && view !== "factory" && (
-              <button
-                onClick={() => {
-                  if (demo) {
-                    setDemo(false);
-                    load();
-                  } else {
-                    setDemo(true);
-                    setWorkspace(demoWorkspace());
-                    setSelectedId("demo-btc");
-                    setLoaded(true);
-                  }
-                }}
-              >
-                {demo ? "Exit demo" : "Load demo"}
-              </button>
-            )}
+            {view !== "operations" &&
+              view !== "factory" &&
+              view !== "models" &&
+              view !== "service" && (
+                <button
+                  onClick={() => {
+                    if (demo) {
+                      setDemo(false);
+                      load();
+                    } else {
+                      setDemo(true);
+                      setWorkspace(demoWorkspace());
+                      setSelectedId("demo-btc");
+                      setLoaded(true);
+                    }
+                  }}
+                >
+                  {demo ? "Exit demo" : "Load demo"}
+                </button>
+              )}
           </div>
         </header>
         {demo && (
@@ -1374,9 +1381,12 @@ export default function Studio({
               <OperationsHome
                 csrf={csrf}
                 openMissions={() => setView("factory")}
+                openService={() => setView("service")}
               />
             )}
             {view === "factory" && <BusinessFactory csrf={csrf} />}
+            {view === "service" && <ServiceDesk csrf={csrf} />}
+            {view === "models" && <ModelWorkbench csrf={csrf} />}
             {view === "agents" && (
               <>
                 <PageTitle

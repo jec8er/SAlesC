@@ -2,6 +2,18 @@
 
 ## Direction update — November 3, 2026
 
+The optional [Model team](docs/model-team.md) connects a local primary model to a
+separate reviewer through the checkpointed Ecomoda workflow. Authenticated owners
+can submit tasks and recover plain-text artifacts from the Model team screen.
+This is a bounded inference workflow, not an autonomous online business or proof
+of better answer quality. Commercial missions are not automatically executed.
+
+The private [Service desk](docs/service-desk.md) now supports owner-entered
+inquiries, versioned quote drafts, owner approval, dated internal follow-ups and
+record/quote exports. It persists in SQLite using the existing owner session and
+revision checks. Customer sending, notifications and payment collection are not
+enabled by this feature.
+
 English policy drafts and the unresolved publication checklist are in
 [`docs/policies.md`](docs/policies.md). These drafts do not activate billing,
 approve a launch or establish legal compliance.

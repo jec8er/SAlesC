@@ -38,8 +38,11 @@ autonomous agents running. The local scoring engine is deterministic, not a lang
 1. Inventory the current application. Code reviewed; full interactive audit pending.
 2. Establish the commercial operations home. Implemented in this change.
 3. Align documentation with the actual capabilities. Updated in this change.
-4. Add durable inquiry, quote and follow-up records. Not yet implemented.
-5. Demonstrate the full service using clearly labeled fictional data. Pending step 4.
+4. Add durable inquiry, quote and follow-up records. Implemented as an owner-only
+   service desk with version checks, quote history, approvals and exports.
+5. Demonstrate the internal service workflow using clearly labeled fictional data.
+   Local browser verification is recorded in `docs/service-desk.md`; public intake,
+   notifications, customer acceptance and automatic delivery remain pending.
 6. Validate the problem with five potential buyers. No interviews or demand claimed.
 7. Agree one bounded paid pilot after delivery capability is demonstrated. No buyer yet.
 8. Deliver and measure response time, quotes and administration time for seven days.
@@ -80,7 +83,7 @@ revealing credentials. No sending, spending, publishing or billing is triggered.
 
 ## Verification of this change
 
-- All 68 existing automated tests passed, including authenticated mission creation,
+- All 69 automated tests passed, including authenticated mission creation,
   revision checks and restart persistence.
 - TypeScript, the production build and repository formatting passed.
 - Browser verification on an isolated local SQLite fixture covered pilot creation,

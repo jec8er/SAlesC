@@ -13,9 +13,11 @@ type Mission = {
 export default function OperationsHome({
   csrf,
   openMissions,
+  openService,
 }: {
   csrf: string;
   openMissions: () => void;
+  openService: () => void;
 }) {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -90,6 +92,14 @@ export default function OperationsHome({
       </p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      <h2>Manage an inquiry</h2>
+      <p>
+        Record a request, prepare a quote for owner review and track internal
+        follow-ups.
+      </p>
+      <button className="neon-button" onClick={openService}>
+        Open service desk
+      </button>
       <h2>Your work in progress</h2>
       {!loaded && !error && <p role="status">Loading missions…</p>}
       {loaded && missions.length === 0 && (

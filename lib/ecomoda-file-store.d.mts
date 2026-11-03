@@ -15,6 +15,7 @@ export type EcomodaFileStore = {
   append(id: string, event: unknown): Promise<void>;
   checkpoints(id: string): Promise<unknown[]>;
   inspect(id: string): Promise<EcomodaTaskSummary>;
+  artifacts?(id: string): Promise<unknown | null>;
   finish(id: string, result: unknown): Promise<void>;
   release(id: string): Promise<void>;
 };
