@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"><title>ORBIT Quote Kit</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f0f4f3;color:#182c27;font:16px/1.55 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:2rem 1rem}header,section,article{background:white;border-radius:16px;padding:1.5rem;margin-bottom:1rem}header{background:#12382f;color:white}h1,h2{margin:0 0 .65rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:1rem}label{display:grid;gap:.35rem;font-weight:600}input,textarea,button{font:inherit;padding:.55rem;border:1px solid #829690;border-radius:6px;width:100%}button{width:auto;background:#165a48;color:white;cursor:pointer}textarea{resize:vertical}output{display:block;margin:1rem 0;font-weight:700}#scopeText{white-space:pre-wrap}li{margin:.65rem 0}li button{margin-left:.5rem}@media print{body{background:white}main{padding:0}main>*:not(#quote),.screen{display:none!important}#quote{padding:0}}
+</style>
+<main>
+<header><small>ORBIT / DIGITAL TOOLKIT</small><h1>Quote Kit</h1><p>Price digital projects, create client quotes, and track your follow-ups.</p></header>
+<section><h2>1. Price the job</h2><p>Estimate total project hours, including revisions and client meetings. Include software, subcontractors, and other project costs. This tool calculates a USD price before tax.</p>
+<form id="pricing"><div class="grid">
+<label>Total project hours<input id="hours" type="number" min="0" max="10000" step=".01" value="6" required></label>
+<label>Loaded cost per hour ($)<input id="rate" type="number" min="0" max="10000" step=".01" value="25" required></label>
+<label>Project expenses ($)<input id="supplies" type="number" min="0" max="100000" step=".01" value="20" required></label>
+<label>Overhead allocated to this job ($)<input id="overhead" type="number" min="0" max="100000" step=".01" value="30" required></label>
+<label>Target profit margin (%)<input id="margin" type="number" min="0" max="99" step=".01" value="25" required></label>
+</div><output id="estimate" aria-live="polite"></output></form>
+<p>Margin is profit divided by the selling price. The suggested price rounds up to the next cent.</p></section>
+<section><h2>2. Prepare the quote</h2><p>List the digital deliverables, revision limits, delivery dates, and exclusions.</p><div class="grid">
+<label>Your business name<input id="seller" maxlength="100"></label><label>Prepared for<input id="buyer" maxlength="100"></label><label>Valid through<input id="expiry" type="date"></label><label>Scope of work<textarea id="scope" maxlength="2000" rows="3"></textarea></label>
+</div></section>
+<article id="quote"><h2>Service quote</h2><p id="parties"></p><p id="scopeText"></p><p id="validity"></p><p><strong>Proposed price before tax: <span id="price"></span></strong></p><button id="print" class="screen" type="button">Print or save as PDF</button></article>
+<section><h2>3. Track follow-ups</h2><p id="storage">Follow-ups stay in this browser. Keep a separate copy of anything you need to retain.</p><form id="tracker"><div class="grid"><label>Quote reference<input id="reference" maxlength="120" required></label><label>Follow-up date<input id="due" type="date" required></label></div><p><button>Add follow-up</button></p></form><ul id="items"></ul></section>
+<section><h2>Follow-up templates</h2><p><strong>After sending:</strong> Hi [name], I’m checking that you received the quote for [service]. Is there anything about the scope or timing you’d like me to clarify?</p><p><strong>Before expiry:</strong> Hi [name], the quote for [service] is valid through [date]. If you’re still interested, let me know what start date works for you and I’ll confirm availability.</p></section>
+</main>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const usd = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
+function refresh(){
+ const valid = el('pricing').checkValidity();
+ const read = id => Math.round(el(id).valueAsNumber * 100);
+ const cost = read('hours') * read('rate') + (read('supplies') + read('overhead')) * 100;
+ const cents = Math.ceil(cost * 100 / (10000 - read('margin')));
+ el('estimate').textContent = valid ? 'Estimated cost: '+usd.format(cost/10000)+' · Suggested price: '+usd.format(cents/100) : 'Enter valid amounts and a margin from 0% to 99%.';
+ el('price').textContent = valid ? usd.format(cents/100) : 'Pending';
+ el('print').disabled = !valid;
+ el('parties').textContent = (el('seller').value || 'Your business')+' | Prepared for: '+(el('buyer').value || 'Customer');
+ el('scopeText').textContent = el('scope').value;
+ el('validity').textContent = el('expiry').value ? 'Valid through '+el('expiry').value : '';
+}
+document.addEventListener('input',refresh);
+el('pricing').addEventListener('submit',event=>event.preventDefault());
+el('print').addEventListener('click',()=>window.print());
+const key='orbit.quote-kit.followups.v1';
+let entries=[];
+function storageUnavailable(){el('storage').textContent='This browser does not allow saving here. Follow-ups will reset when you close or reload the kit.';}
+try{const saved=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(saved))entries=saved.filter(x=>x&&typeof x.reference==='string'&&typeof x.due==='string');}catch{storageUnavailable();}
+function render(){
+ el('items').replaceChildren();
+ entries.sort((a,b)=>a.due.localeCompare(b.due)).forEach((entry,i)=>{
+  const li=document.createElement('li');
+  li.textContent=entry.due+' — '+entry.reference;
+  const done=document.createElement('button');done.type='button';done.textContent='Mark done';
+  done.addEventListener('click',()=>{entries.splice(i,1);save();});li.append(done);el('items').append(li);
+ });
+}
+function save(){try{localStorage.setItem(key,JSON.stringify(entries));}catch{storageUnavailable();}render();}
+el('tracker').addEventListener('submit',event=>{
+ event.preventDefault();const reference=el('reference').value.trim();if(!reference)return;
+ entries.push({reference,due:el('due').value});save();event.currentTarget.reset();
+});
+refresh();render();
+</script>
+</html>

@@ -1,0 +1,115 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import express from "express";
+import Stripe from "stripe";
+import { digest } from "../server/auth.ts";
+import { mountQuoteStore } from "../server/quote-store.ts";
+
+test("only a signed matching paid test session unlocks the buyer's download", async (t) => {
+  const db = new DatabaseSync(":memory:");
+  t.after(() => db.close());
+  const app = express();
+  const secret = "whsec_local_fixture";
+  const key = "sk_test_local_fixture";
+  const grant = "a".repeat(64);
+  const stripe = new Stripe(key);
+  mountQuoteStore(app, db, "http://localhost", { key, secret });
+  db.prepare("INSERT INTO quote_kit_orders VALUES(?,?,?,0)").run(
+    "order",
+    digest(grant),
+    "cs_test_order",
+  );
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  t.after(() => {
+    server.close();
+  });
+  const address = server.address();
+  assert(address && typeof address !== "string");
+  const origin = "http://127.0.0.1:" + address.port;
+  assert.equal(
+    (await fetch(origin + "/store/quote-kit?source=guide")).status,
+    200,
+  );
+  const calculation = await fetch(
+    origin + "/store/quote-kit?source=guide&cost=300.05&margin=20",
+  );
+  assert.match(await calculation.text(), /\$375\.07/);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT source, event, count FROM quote_kit_metrics ORDER BY event",
+      )
+      .all()
+      .map((row) => [row.source, row.event, row.count]),
+    [
+      ["guide", "calculation", 1],
+      ["guide", "page_view", 1],
+    ],
+  );
+  const download = origin + "/store/quote-kit/order/order?download=1";
+  const buyer = { cookie: "orbit_quote_grant=" + grant };
+  const send = (
+    status: string,
+    amount: number,
+    signed = true,
+    type = "checkout.session.completed",
+  ) => {
+    const payload = JSON.stringify({
+      type,
+      livemode: false,
+      data: {
+        object: {
+          id: "cs_test_order",
+          mode: "payment",
+          currency: "usd",
+          payment_status: status,
+          amount_total: amount,
+          metadata: { product: "orbit-quote-kit", order: "order" },
+        },
+      },
+    });
+    return fetch(origin + "/api/quote-kit/webhook", {
+      method: "POST",
+      body: payload,
+      headers: {
+        "content-type": "application/json",
+        "stripe-signature": signed
+          ? stripe.webhooks.generateTestHeaderString({ payload, secret })
+          : "invalid",
+      },
+    });
+  };
+  assert.equal((await send("paid", 1900, false)).status, 400);
+  assert.equal((await send("unpaid", 1900)).status, 204);
+  assert.equal((await send("paid", 1)).status, 204);
+  assert.match(
+    await (await fetch(download, { headers: buyer })).text(),
+    /Awaiting payment/,
+  );
+  assert.equal(
+    (await send("unpaid", 1900, true, "checkout.session.expired")).status,
+    204,
+  );
+  const expired = await (await fetch(download, { headers: buyer })).text();
+  assert.match(expired, /Payment did not complete/);
+  assert.doesNotMatch(expired, /http-equiv="refresh"/);
+  assert.equal((await send("paid", 1900)).status, 204);
+  assert.equal((await send("paid", 1900)).status, 204);
+  assert.equal(
+    db
+      .prepare(
+        "SELECT count FROM quote_kit_metrics WHERE source='direct' AND event='paid_order'",
+      )
+      .get()?.count,
+    1,
+  );
+  assert.equal((await fetch(download)).status, 404);
+  const result = await fetch(download, { headers: buyer });
+  assert.match(result.headers.get("content-disposition") || "", /attachment/);
+  assert.match(await result.text(), /<title>ORBIT Quote Kit<\/title>/);
+});

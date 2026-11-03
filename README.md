@@ -1,5 +1,36 @@
 # ORBIT
 
+## Direction update — November 3, 2026
+
+The optional [Model team](docs/model-team.md) connects a local primary model to a
+separate reviewer through the checkpointed Ecomoda workflow. Authenticated owners
+can submit tasks and recover plain-text artifacts from the Model team screen.
+This is a bounded inference workflow, not an autonomous online business or proof
+of better answer quality. Commercial missions are not automatically executed.
+
+The private [Service desk](docs/service-desk.md) now supports owner-entered
+inquiries, versioned quote drafts, owner approval, dated internal follow-ups and
+record/quote exports. It persists in SQLite using the existing owner session and
+revision checks. Customer sending, notifications and payment collection are not
+enabled by this feature.
+
+English policy drafts and the unresolved publication checklist are in
+[`docs/policies.md`](docs/policies.md). These drafts do not activate billing,
+approve a launch or establish legal compliance.
+
+ORBIT now opens on an English operations home: stored commercial missions,
+completed-task counts, launch blockers and a pilot-planning form for a small
+cleaning business. The form persists through the existing authenticated mission
+API; it does not execute tasks, contact customers or collect money. Existing
+market research and paper simulation remain available in their separate views.
+
+The product hypothesis is a private workspace for building and delivering one
+repeatable business service with minimal owner intervention. The first proposed
+service is inquiry, quote and follow-up organization. Buyer demand, delivery
+capacity and pricing remain unvalidated. See `docs/orbit-refinement.md` for scope,
+the autonomy boundary and the ten-step roadmap. The market-laboratory description
+below documents the retained implementation, rather than the new commercial offer.
+
 A standalone agentic market laboratory for jec8er. ORBIT coordinates research, strategy, risk, compliance, paper execution and audit in one private workspace. Its native intelligence engine reasons from stored evidence without OpenAI, an external model API or a cloud inference dependency. It runs directly from this GitHub repository with **React + Vite, Express and SQLite**.
 
 ## Start locally (Windows, macOS or Linux)

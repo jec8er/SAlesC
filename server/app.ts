@@ -16,6 +16,9 @@ import {
   missionSummary,
 } from "../lib/business-factory.mjs";
 import { jurisdictionByCode } from "../lib/us-policy.mjs";
+import { mountServiceDesk } from "./service-desk.ts";
+import { mountQuoteStore } from "./quote-store.ts";
+import { LocalInferenceUnavailable } from "./local-inference.ts";
 import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
@@ -151,6 +154,7 @@ export function createApplication(config: Config) {
       }
     },
   );
+  mountQuoteStore(app, db, config.publicOrigin);
   app.use(express.json({ limit: "350kb", strict: true }));
   const cookieName = "sc_session";
   function token(req: Request) {
@@ -187,6 +191,7 @@ export function createApplication(config: Config) {
     next();
   }
   const attempts = new Map<string, { count: number; until: number }>();
+  mountServiceDesk(app, db, auth, now);
   app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/billing/config", (_req, res) =>
     res.json({
@@ -518,6 +523,32 @@ export function createApplication(config: Config) {
       next(error);
     }
   });
+  app.get("/api/ecomoda/config", auth, (_req, res) => {
+    res.json({
+      configured: Boolean(config.ecomodaInfer && config.ecomodaStore),
+      artifactsAvailable: Boolean(config.ecomodaStore?.artifacts),
+    });
+  });
+  // Artifact content is owner-only; the status endpoint remains redacted.
+  app.get("/api/ecomoda/tasks/:id/artifacts", auth, async (req, res, next) => {
+    if (!config.ecomodaStore?.artifacts)
+      return res
+        .status(503)
+        .json({ error: "Artifact storage is not configured" });
+    const id = String(req.params.id);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id))
+      return res.status(400).json({ error: "Invalid task ID" });
+    try {
+      const result = await config.ecomodaStore.artifacts(id);
+      if (!result)
+        return res
+          .status(404)
+          .json({ error: "No completed artifact is available yet" });
+      res.json({ result });
+    } catch (error) {
+      next(error);
+    }
+  });
   const ecomodaTask = z
     .object({
       id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
@@ -553,6 +584,8 @@ export function createApplication(config: Config) {
         },
       });
     } catch (error) {
+      if (error instanceof LocalInferenceUnavailable)
+        return res.status(503).json({ error: error.message });
       if (error instanceof Error && error.name === "TimeoutError")
         return res
           .status(504)

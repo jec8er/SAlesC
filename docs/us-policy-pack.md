@@ -1,5 +1,12 @@
 # ORBIT U.S. policy-readiness pack
 
+Updated November 3, 2026. The English draft documents are maintained in
+[ORBIT policy pack](policies.md). They cover the private workspace, proposed
+commercial pilot, AI disclosure, delegated actions, billing, cancellation,
+retention and incident response. They are not approved or effective customer terms.
+Operator identity, contact channels, retention periods and jurisdiction-specific
+review remain publication prerequisites. Existing approval gates remain unchanged.
+
 ## Scope
 
 ORBIT supports one launch jurisdiction per mission across all 50 U.S. states
@@ -77,3 +84,8 @@ or personalized advice through this feature.
 
 These links are sources for review, not proof that a generated checklist is
 complete for a particular business.
+
+The selected mission state is only the starting point. Review other applicable
+resident/customer jurisdictions, service-provider contracts, email permissions and
+billing rules against the actual deployed activity. Record the reviewed policy
+version and reassess after material product or data-flow changes.

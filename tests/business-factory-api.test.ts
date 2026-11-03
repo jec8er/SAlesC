@@ -104,6 +104,47 @@ test("business missions enforce authentication, CSRF, revision, and restart pers
       }),
     });
     assert.equal(r.status, 409);
+    // The UI now submits measured usage and evidence instead of silently saving zeros.
+    const artifact = {
+      kind: "market-evidence",
+      summary: "Recorded a bounded research result",
+      evidence: ["fixture:research-record"],
+      costCents: 25,
+      minutes: 5,
+    };
+    r = await fetch(url + "/example/actions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        revision: 1,
+        action: "submit",
+        taskId: "research",
+        artifact: { ...artifact, costCents: 601 },
+      }),
+    });
+    assert.equal(r.status, 400);
+    r = await fetch(url + "/example/actions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        revision: 1,
+        action: "submit",
+        taskId: "research",
+        artifact,
+      }),
+    });
+    assert.equal(r.status, 200);
+    r = await fetch(url + "/example/actions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        revision: 2,
+        action: "review",
+        taskId: "research",
+        decision: { approved: true, note: "Evidence reviewed" },
+      }),
+    });
+    assert.equal(r.status, 200);
     await s.close();
     s = await launch();
     assert.equal(
@@ -127,13 +168,28 @@ test("business missions enforce authentication, CSRF, revision, and restart pers
         id: string;
         targetState: string;
         revision: number;
-        tasks: { id: string; status: string }[];
+        tasks: {
+          id: string;
+          status: string;
+          actualCostCents: number;
+          actualMinutes: number;
+          artifact: { evidence: string[] } | null;
+        }[];
       }[];
     };
     assert.equal(result.missions[0].id, "example");
     assert.equal(result.missions[0].targetState, "CA");
-    assert.equal(result.missions[0].revision, 1);
-    assert.equal(result.missions[0].tasks[0].status, "running");
+    assert.equal(result.missions[0].revision, 3);
+    assert.equal(result.missions[0].tasks[0].status, "completed");
+    assert.equal(result.missions[0].tasks[0].actualCostCents, 25);
+    assert.equal(result.missions[0].tasks[0].actualMinutes, 5);
+    assert.deepEqual(result.missions[0].tasks[0].artifact?.evidence, [
+      "fixture:research-record",
+    ]);
+    assert.equal(
+      result.missions[0].tasks.find((task) => task.id === "offer")?.status,
+      "ready",
+    );
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });

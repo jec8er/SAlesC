@@ -2116,3 +2116,104 @@ td small {
     scroll-behavior: auto !important;
   }
 }
+
+/* Commercial operations forms retain readable labels at narrow widths. */
+.mission-form {
+  display: grid;
+  gap: 12px;
+  max-width: 640px;
+  margin: 16px 0;
+}
+.mission-form label,
+.business-factory form > label {
+  display: grid;
+  gap: 6px;
+}
+.mission-form input,
+.mission-form select,
+.mission-form textarea,
+.business-factory input:not([type="checkbox"]),
+.business-factory select,
+.business-factory textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--text);
+  padding: 10px 12px;
+}
+.mission-form textarea {
+  resize: vertical;
+}
+.business-factory button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface2);
+  padding: 9px 14px;
+}
+.business-factory article,
+.operations-home article {
+  overflow-wrap: anywhere;
+}
+.mission-form p {
+  margin: 0;
+  color: var(--muted);
+}
+.service-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+.service-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.service-list button {
+  text-align: left;
+  display: grid;
+  gap: 6px;
+}
+.service-list button[aria-current="true"] {
+  border-color: var(--cyan);
+}
+.service-list span {
+  color: var(--muted);
+}
+.service-desk button {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface2);
+}
+.service-record {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.service-record h2 {
+  margin-top: 0;
+}
+.quote-preview {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface2);
+}
+.quote-preview > strong {
+  font-size: 28px;
+  color: var(--cyan);
+}
+.service-desk summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.service-record li {
+  margin: 10px 0;
+}
+@media (max-width: 850px) {
+  .service-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

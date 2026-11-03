@@ -459,6 +459,26 @@ test("cycle creation requires configured inference and returns only redacted sta
       publishAllowed: false,
       verifiedRevenue: null,
     });
+    assert.equal(
+      (await fetch(s.origin + "/api/ecomoda/tasks/job/artifacts")).status,
+      401,
+    );
+    const artifacts = await fetch(
+      s.origin + "/api/ecomoda/tasks/job/artifacts",
+      { headers: authorized },
+    );
+    assert.equal(artifacts.status, 200);
+    const savedResult = (await artifacts.json()) as {
+      result: { events: { output: string }[] };
+    };
+    assert.equal(savedResult.result.events[1].output, "draft secret");
+    const modelConfig = await fetch(s.origin + "/api/ecomoda/config", {
+      headers: authorized,
+    });
+    assert.deepEqual(await modelConfig.json(), {
+      configured: true,
+      artifactsAvailable: true,
+    });
     r = await fetch(s.origin + "/api/ecomoda/tasks", {
       method: "POST",
       headers: authorized,
