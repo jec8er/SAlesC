@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ORBIT Cloud Console</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(at top left,#cbe9ff,transparent 65%),#f5f6fc;color:#172d46;font:16px/1.55 system-ui}main{max-width:780px;margin:auto;padding:clamp(1rem,6vw,4rem)}h1{font-size:clamp(2.6rem,8vw,4.5rem);letter-spacing:-.065em;line-height:1;margin:.25em 0}section{background:#ffffffa8;border:1px solid white;border-radius:1.5rem;padding:1.4rem;margin:1rem 0;box-shadow:0 15px 40px #24436718}button{background:#173956;color:white;border:0;border-radius:.7rem;padding:.6rem .9rem;font:inherit;cursor:pointer}button:disabled{opacity:.55}input{display:block;margin:1rem 0;max-width:100%}li{margin:.6rem 0}code{margin-right:.6rem}a{color:#164f79}
+</style>
+<main><small>ORBIT CLOUD · LOCAL RELEASE CONSOLE</small><h1>Publish a website.</h1>
+<p>Upload one standalone HTML file. ORBIT keeps your releases so you can switch back at any time.</p>
+<p><a href="http://127.0.0.1:3020/" target="_blank" rel="noopener">Open live site ↗</a></p>
+<section><h2>New release</h2><label for="file">HTML document · up to 2 MB</label>
+<input id="file" type="file" accept=".html,text/html"><button id="publish" type="button">Publish release</button>
+<p id="message" role="status" aria-live="polite"></p></section>
+<section><h2>Release history</h2><ul id="releases"></ul></section></main>
+<script>
+const file = document.getElementById("file");
+const publish = document.getElementById("publish");
+const message = document.getElementById("message");
+const list = document.getElementById("releases");
+async function load() {
+  const response = await fetch("/releases");
+  if (!response.ok) throw Error("Could not load releases.");
+  const { current, releases } = await response.json();
+  list.replaceChildren();
+  if (!releases.length) list.append("No releases yet.");
+  for (const id of releases) {
+    const row = document.createElement("li");
+    const label = document.createElement("code");
+    label.textContent = id.slice(0, 12);
+    row.append(label);
+    if (id === current) row.append("Live");
+    else {
+      const button = document.createElement("button");
+      button.textContent = "Restore";
+      button.addEventListener("click", () => change("/rollback/" + id, undefined, button, "Release restored."));
+      row.append(button);
+    }
+    list.append(row);
+  }
+}
+async function change(path, body, button, success) {
+  button.disabled = true;
+  message.textContent = "Working…";
+  try {
+    const response = await fetch(path, { method: "POST", body });
+    if (!response.ok) throw Error("Release rejected. Use a standalone HTML document under 2 MB.");
+    await load();
+    message.textContent = success;
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+publish.addEventListener("click", () => {
+  if (!file.files[0]) {
+    message.textContent = "Choose an HTML file first.";
+    return;
+  }
+  change("/deploy", file.files[0], publish, "Release published.");
+});
+load().catch(error => { message.textContent = error.message; });
+</script></html>
