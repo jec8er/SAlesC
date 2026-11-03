@@ -142,10 +142,11 @@ export function mountQuoteStore(
     if (order.paid && req.query.download === "1")
       return res.download(kit, "ORBIT-Quote-Kit.html");
     return res.send(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Quote Kit order</title>
+      ${order.paid ? "" : '<meta http-equiv="refresh" content="5">'}
       <h1>Quote Kit order</h1>${
         order.paid
           ? '<p><a href="?download=1">Download the Quote Kit</a></p>'
-          : '<p>Awaiting payment confirmation. <a href="?">Check again</a>.</p>'
+          : '<p>Awaiting payment confirmation. This page checks automatically. Keep it open to get your download link.</p>'
       }</html>`);
   });
 }
