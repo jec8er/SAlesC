@@ -10,6 +10,11 @@
 <section><h2>New release</h2><label for="file">HTML document · up to 2 MB</label>
 <input id="file" type="file" accept=".html,text/html"><button id="publish" type="button">Publish release</button>
 <p id="message" role="status" aria-live="polite"></p></section>
+<section><h2>Publish from GitHub</h2>
+<form id="github"><label>Public repository <input name="repository" required placeholder="owner/repository"></label>
+<label>Branch <input name="branch" required value="main"></label>
+<label>HTML file path <input name="path" required value="index.html"></label>
+<button>Import and publish</button></form></section>
 <section><h2>Release history</h2><ul id="releases"></ul></section></main>
 <script>
 const file = document.getElementById("file");
@@ -42,7 +47,7 @@ async function change(path, body, button, success) {
   message.textContent = "Working…";
   try {
     const response = await fetch(path, { method: "POST", body });
-    if (!response.ok) throw Error("Release rejected. Use a standalone HTML document under 2 MB.");
+    if (!response.ok) throw Error("Release rejected. Check the file or GitHub path and use standalone HTML under 2 MB.");
     await load();
     message.textContent = success;
   } catch (error) {
@@ -57,6 +62,11 @@ publish.addEventListener("click", () => {
     return;
   }
   change("/deploy", file.files[0], publish, "Release published.");
+});
+document.getElementById("github").addEventListener("submit", event => {
+  event.preventDefault();
+  const query = new URLSearchParams(new FormData(event.currentTarget));
+  change("/import?" + query, undefined, event.submitter, "GitHub release published.");
 });
 load().catch(error => { message.textContent = error.message; });
 </script></html>

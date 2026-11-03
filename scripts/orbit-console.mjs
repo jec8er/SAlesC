@@ -41,6 +41,38 @@ createServer(async (req, res) => {
     }
     if (req.method !== "POST") return res.writeHead(404).end();
     if (req.headers.origin !== origin) return res.writeHead(403).end();
+    const requestUrl = new URL(req.url || "/", origin);
+    if (requestUrl.pathname === "/import") {
+      const repository = requestUrl.searchParams.get("repository") || "";
+      const branch = requestUrl.searchParams.get("branch") || "";
+      const path = requestUrl.searchParams.get("path") || "";
+      const segments = path.split("/");
+      if (!/^[\w-]+\/[\w.-]+$/.test(repository) ||
+          !/^[\w][\w./-]{0,99}$/.test(branch) || branch.includes("..") ||
+          !path.endsWith(".html") || segments.some(segment =>
+            !/^[\w.-]+$/.test(segment) || segment === "." || segment === ".."))
+        return res.writeHead(400).end();
+      const url = "https://raw.githubusercontent.com/" + repository +
+        "/refs/heads/" + branch.split("/").map(encodeURIComponent).join("/") +
+        "/" + segments.map(encodeURIComponent).join("/");
+      const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(12000) });
+      if (!response.ok || !response.body) return res.writeHead(422).end();
+      const chunks = [];
+      let bytes = 0;
+      for await (const chunk of response.body) {
+        bytes += chunk.length;
+        if (bytes > 2_000_000) return res.writeHead(413).end();
+        chunks.push(chunk);
+      }
+      const folder = await mkdtemp(join(tmpdir(), "orbit-release-"));
+      try {
+        const file = join(folder, "index.html");
+        await writeFile(file, Buffer.concat(chunks));
+        return res.writeHead(run("deploy", file) ? 204 : 422).end();
+      } finally {
+        await rm(folder, { recursive: true, force: true });
+      }
+    }
     if (req.url?.startsWith("/rollback/")) {
       const id = req.url.slice(10);
       return res.writeHead(releasePattern.test(id) && run("rollback", id) ? 204 : 400).end();
