@@ -68,6 +68,10 @@ export function mountQuoteStore(
   );
 
   app.get("/store/quote-kit", (_req, res) => {
+    res.set(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
+    );
     res.set("Cache-Control", "no-store")
       .send(`<!doctype html><html lang="en"><meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -122,8 +126,7 @@ export function mountQuoteStore(
         path: "/store/quote-kit/order/" + id,
         maxAge: 30 * 86400000,
       });
-      return res.send(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Test checkout</title>
-        <p><a href="${session.url.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;")}">Continue to Stripe test checkout</a></p></html>`);
+      return res.redirect(303, session.url);
     } catch {
       return res.sendStatus(502);
     }
@@ -146,7 +149,7 @@ export function mountQuoteStore(
       <h1>Quote Kit order</h1>${
         order.paid
           ? '<p><a href="?download=1">Download the Quote Kit</a></p>'
-          : '<p>Awaiting payment confirmation. This page checks automatically. Keep it open to get your download link.</p>'
+          : "<p>Awaiting payment confirmation. This page checks automatically. Keep it open to get your download link.</p>"
       }</html>`);
   });
 }
