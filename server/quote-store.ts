@@ -59,17 +59,23 @@ export function mountQuoteStore(
       <meta name="viewport" content="width=device-width,initial-scale=1">
       <title>ORBIT Quote Kit</title>
       <style>body{margin:0;background:#eff5f2;color:#183329;font:17px/1.55 system-ui}main{max-width:42rem;margin:3rem auto;padding:1.5rem}section{background:white;border-radius:1rem;padding:1.5rem;margin:1.5rem 0}label{display:block;margin:.75rem 0}input,button{font:inherit;padding:.45rem}button{background:#165a48;color:white;border:0;border-radius:.4rem;cursor:pointer}</style>
-      <main><h1>ORBIT Quote Kit</h1>
-      <p>Price cleaning jobs, print customer quotes, and track follow-ups.</p>
+      <main><p>ORBIT QUOTE KIT · FOR DIGITAL FREELANCERS</p>
+      <h1>Turn your project costs into a client quote</h1>
+      <p>Use the free calculator to decide what to charge for a website, design project, or other digital work. The full kit helps you turn that price into a quote you can send as a PDF.</p>
       <section><h2>Try the price calculator</h2>
       <form method="get" action="/store/quote-kit">
-      <label>Total job cost (USD) <input name="cost" type="number" min="0" max="100000" step=".01" required value="${valid ? cost : 200}"></label>
+      <label>Total project cost (USD) <input name="cost" type="number" min="0" max="100000" step=".01" required value="${valid ? cost : 200}"></label>
       <label>Target margin (%) <input name="margin" type="number" min="0" max="99" step=".01" required value="${valid ? margin : 25}"></label>
       <button>Calculate price</button></form>
       <p role="status">${valid ? "Suggested price before tax: " + price : "Enter a valid job cost and a margin from 0% to 99%."}</p></section>
+      <section><h2>Example: a five-page website</h2>
+      <p>Six hours at an internal cost of $40 per hour, plus $60 in project expenses, totals $300. To keep 20% of the sale as profit, quote $375 before tax.</p>
+      <p><a href="/store/quote-kit?cost=300&amp;margin=20">Try the website example</a></p></section>
+      <section><h2>What comes in the full kit</h2>
+      <ol><li>Break down project hours and expenses.</li><li>Add deliverables, revision limits, and deadlines to your quote, then save it as a PDF.</li><li>Set a follow-up date and use the included message templates.</li></ol>
       ${enabled ? "<p>Test checkout · USD 19 · No real charge</p>" : "<p>Checkout is currently unavailable.</p>"}
       ${enabled ? '<form method="post" action="/api/quote-kit/checkout"><button>Start test checkout</button></form>' : ""}
-      </main></html>`);
+      </section></main></html>`);
   });
 
   if (!origin || !secret || !key || !/^(sk|rk)_test_/.test(key)) return;

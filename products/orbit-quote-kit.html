@@ -4,17 +4,17 @@
 *{box-sizing:border-box}body{margin:0;background:#f0f4f3;color:#182c27;font:16px/1.55 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:2rem 1rem}header,section,article{background:white;border-radius:16px;padding:1.5rem;margin-bottom:1rem}header{background:#12382f;color:white}h1,h2{margin:0 0 .65rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:1rem}label{display:grid;gap:.35rem;font-weight:600}input,textarea,button{font:inherit;padding:.55rem;border:1px solid #829690;border-radius:6px;width:100%}button{width:auto;background:#165a48;color:white;cursor:pointer}textarea{resize:vertical}output{display:block;margin:1rem 0;font-weight:700}#scopeText{white-space:pre-wrap}li{margin:.65rem 0}li button{margin-left:.5rem}@media print{body{background:white}main{padding:0}main>*:not(#quote),.screen{display:none!important}#quote{padding:0}}
 </style>
 <main>
-<header><small>ORBIT / DIGITAL TOOLKIT</small><h1>Quote Kit</h1><p>Price a cleaning job, print a customer quote, and track your follow-ups.</p></header>
-<section><h2>1. Price the job</h2><p>Use total crew hours: two people working three hours each is six crew hours. Include payroll costs in your hourly rate. This tool calculates a USD price before tax.</p>
+<header><small>ORBIT / DIGITAL TOOLKIT</small><h1>Quote Kit</h1><p>Price digital projects, create client quotes, and track your follow-ups.</p></header>
+<section><h2>1. Price the job</h2><p>Estimate total project hours, including revisions and client meetings. Include software, subcontractors, and other project costs. This tool calculates a USD price before tax.</p>
 <form id="pricing"><div class="grid">
-<label>Total crew hours<input id="hours" type="number" min="0" max="10000" step=".01" value="6" required></label>
+<label>Total project hours<input id="hours" type="number" min="0" max="10000" step=".01" value="6" required></label>
 <label>Loaded cost per hour ($)<input id="rate" type="number" min="0" max="10000" step=".01" value="25" required></label>
-<label>Supplies and travel ($)<input id="supplies" type="number" min="0" max="100000" step=".01" value="20" required></label>
+<label>Project expenses ($)<input id="supplies" type="number" min="0" max="100000" step=".01" value="20" required></label>
 <label>Overhead allocated to this job ($)<input id="overhead" type="number" min="0" max="100000" step=".01" value="30" required></label>
 <label>Target profit margin (%)<input id="margin" type="number" min="0" max="99" step=".01" value="25" required></label>
 </div><output id="estimate" aria-live="polite"></output></form>
 <p>Margin is profit divided by the selling price. The suggested price rounds up to the next cent.</p></section>
-<section><h2>2. Prepare the quote</h2><p>List what is included, exclusions, and any conditions that affect the price.</p><div class="grid">
+<section><h2>2. Prepare the quote</h2><p>List the digital deliverables, revision limits, delivery dates, and exclusions.</p><div class="grid">
 <label>Your business name<input id="seller" maxlength="100"></label><label>Prepared for<input id="buyer" maxlength="100"></label><label>Valid through<input id="expiry" type="date"></label><label>Scope of work<textarea id="scope" maxlength="2000" rows="3"></textarea></label>
 </div></section>
 <article id="quote"><h2>Service quote</h2><p id="parties"></p><p id="scopeText"></p><p id="validity"></p><p><strong>Proposed price before tax: <span id="price"></span></strong></p><button id="print" class="screen" type="button">Print or save as PDF</button></article>
