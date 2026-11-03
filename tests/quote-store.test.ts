@@ -88,6 +88,14 @@ test("only a signed matching paid test session unlocks the buyer's download", as
   );
   assert.equal((await send("paid", 1900)).status, 204);
   assert.equal((await send("paid", 1900)).status, 204);
+  assert.equal(
+    db
+      .prepare(
+        "SELECT count FROM quote_kit_metrics WHERE source='direct' AND event='paid_order'",
+      )
+      .get()?.count,
+    1,
+  );
   assert.equal((await fetch(download)).status, 404);
   const result = await fetch(download, { headers: buyer });
   assert.match(result.headers.get("content-disposition") || "", /attachment/);

@@ -121,7 +121,7 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
       <section><h2>What comes in the full kit</h2>
       <ol><li>Break down project hours and expenses.</li><li>Add deliverables, revision limits, and deadlines to your quote, then save it as a PDF.</li><li>Set a follow-up date and use the included message templates.</li></ol>
       ${enabled ? "<p>Test checkout · USD 19 · No real charge</p>" : "<p>Checkout is currently unavailable.</p>"}
-      ${enabled ? '<form method="post" action="/api/quote-kit/checkout"><button>Start test checkout</button></form>' : ""}
+      ${enabled ? `<form method="post" action="/api/quote-kit/checkout?source=${source}"><button>Start test checkout</button></form>` : ""}
       </section></main></html>`);
   });
 
@@ -131,6 +131,18 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
     id TEXT PRIMARY KEY, grant_hash TEXT NOT NULL, session_id TEXT UNIQUE,
     paid INTEGER NOT NULL DEFAULT 0
   )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS quote_kit_order_sources (
+    order_id TEXT PRIMARY KEY REFERENCES quote_kit_orders(id), source TEXT NOT NULL
+  );
+  CREATE TRIGGER IF NOT EXISTS quote_kit_count_purchase
+  AFTER UPDATE OF paid ON quote_kit_orders
+  WHEN OLD.paid = 0 AND NEW.paid = 1
+  BEGIN
+    INSERT INTO quote_kit_metrics VALUES (
+      COALESCE((SELECT source FROM quote_kit_order_sources WHERE order_id = NEW.id), 'direct'),
+      'paid_order', 1
+    ) ON CONFLICT(source, event) DO UPDATE SET count=count+1;
+  END;`);
 
   app.post(
     "/api/quote-kit/webhook",
@@ -173,6 +185,10 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
 
   app.post("/api/quote-kit/checkout", async (req, res) => {
     if (req.get("origin") !== origin) return res.sendStatus(403);
+    const source =
+      req.query.source === "guide" || req.query.source === "community"
+        ? req.query.source
+        : "direct";
     const id = randomBytes(16).toString("hex");
     const grant = randomBytes(32).toString("hex");
     db.prepare("INSERT INTO quote_kit_orders(id,grant_hash) VALUES(?,?)").run(
@@ -180,6 +196,10 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
       digest(grant),
     );
     try {
+      db.prepare("INSERT INTO quote_kit_order_sources VALUES (?, ?)").run(
+        id,
+        source,
+      );
       const session = await stripe.checkout.sessions.create(
         {
           mode: "payment",
@@ -208,6 +228,7 @@ summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
         session.id,
         id,
       );
+      incrementMetric.run(source, "checkout_start");
       res.cookie("orbit_quote_grant", grant, {
         httpOnly: true,
         secure: origin.startsWith("https:"),
