@@ -21,10 +21,22 @@ export function mountQuoteStore(
   },
 ) {
   const { key, secret } = credentials;
+  db.exec(`CREATE TABLE IF NOT EXISTS quote_kit_metrics (
+    source TEXT NOT NULL, event TEXT NOT NULL, count INTEGER NOT NULL,
+    PRIMARY KEY (source, event)
+  )`);
+  const incrementMetric = db.prepare(
+    "INSERT INTO quote_kit_metrics VALUES (?, ?, 1) ON CONFLICT(source, event) DO UPDATE SET count=count+1",
+  );
   const enabled = Boolean(
     origin && secret && key && /^(sk|rk)_test_/.test(key),
   );
   app.get("/store/quote-kit", (req, res) => {
+    const source =
+      typeof req.query.source === "string" &&
+      /^(guide|community|direct)$/.test(req.query.source)
+        ? req.query.source
+        : "direct";
     res.set(
       "Content-Security-Policy",
       "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
@@ -54,23 +66,58 @@ export function mountQuoteStore(
           ) / 100,
         )
       : "";
+    if (req.method === "GET") {
+      if (req.query.cost === undefined && req.query.margin === undefined)
+        incrementMetric.run(source, "page_view");
+      else if (
+        valid &&
+        typeof req.query.cost === "string" &&
+        typeof req.query.margin === "string"
+      )
+        incrementMetric.run(source, "calculation");
+    }
     res.set("Cache-Control", "no-store")
       .send(`<!doctype html><html lang="en"><meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       <title>ORBIT Quote Kit</title>
-      <style>body{margin:0;background:#eff5f2;color:#183329;font:17px/1.55 system-ui}main{max-width:42rem;margin:3rem auto;padding:1.5rem}section{background:white;border-radius:1rem;padding:1.5rem;margin:1.5rem 0}label{display:block;margin:.75rem 0}input,button{font:inherit;padding:.45rem}button{background:#165a48;color:white;border:0;border-radius:.4rem;cursor:pointer}</style>
+      <style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 8% 0%,#c5e6ff,transparent 52%),radial-gradient(ellipse at 95% 24%,#d6f6e8,transparent 55%),#f4f5fa;color:#13283d;font:16px/1.55 system-ui,sans-serif}
+main{max-width:48rem;margin:auto;padding:clamp(1rem,5vw,3rem)}
+main>p:first-child,small{font-size:.73rem;font-weight:750;letter-spacing:.13em;color:#34586b}
+h1{font-size:clamp(2.15rem,7vw,4rem);line-height:1.04;letter-spacing:-.06em;margin:.4em 0}
+h2{font-size:1.25rem;margin:0 0 .75rem}h3{margin:.5rem 0}
+section{background:#ffffff8c;border:1px solid #ffffffeb;border-radius:1.65rem;padding:clamp(1rem,4vw,1.65rem);margin:1rem 0;backdrop-filter:blur(20px);box-shadow:0 14px 38px #25426417,inset 0 1px 1px white}
+label{display:block;margin:.7rem 0;font-weight:600}
+input,button{font:inherit;padding:.55rem .8rem;border-radius:.75rem}
+input{background:#ffffffbd;border:1px solid #70899e;color:inherit;max-width:100%}
+button{background:#173956;color:white;border:1px solid #ffffff70;cursor:pointer;font-weight:650}
+button:hover{background:#254e70}
+:focus-visible{outline:3px solid #236ca1;outline-offset:3px}
+[role=status]{margin-bottom:0;padding:.75rem 1rem;border-radius:.85rem;background:#e4f4ff;color:#163b59;font-weight:750}
+summary{cursor:pointer;font-weight:700}ol{padding-left:1.25rem}
+</style>
       <main><p>ORBIT QUOTE KIT · FOR DIGITAL FREELANCERS</p>
       <h1>Turn your project costs into a client quote</h1>
       <p>Use the free calculator to decide what to charge for a website, design project, or other digital work. The full kit helps you turn that price into a quote you can send as a PDF.</p>
       <section><h2>Try the price calculator</h2>
       <form method="get" action="/store/quote-kit">
+      <input type="hidden" name="source" value="${source}">
       <label>Total project cost (USD) <input name="cost" type="number" min="0" max="100000" step=".01" required value="${valid ? cost : 200}"></label>
       <label>Target margin (%) <input name="margin" type="number" min="0" max="99" step=".01" required value="${valid ? margin : 25}"></label>
       <button>Calculate price</button></form>
       <p role="status">${valid ? "Suggested price before tax: " + price : "Enter a valid job cost and a margin from 0% to 99%."}</p></section>
       <section><h2>Example: a five-page website</h2>
       <p>Six hours at an internal cost of $40 per hour, plus $60 in project expenses, totals $300. To keep 20% of the sale as profit, quote $375 before tax.</p>
-      <p><a href="/store/quote-kit?cost=300&amp;margin=20">Try the website example</a></p></section>
+      <details><summary>See the client quote</summary>
+      <article style="margin-top:1rem;padding:1.25rem;border:1px solid #b8cec4;border-left:4px solid #165a48;border-radius:.5rem">
+      <small>SAMPLE CLIENT QUOTE</small>
+      <h3>Five-page website</h3>
+      <p><strong>Deliverables</strong><br>Five responsive pages and a handoff guide.</p>
+      <p><strong>Timeline</strong><br>Ten business days after receiving content.</p>
+      <p><strong>Revisions</strong><br>One round included.</p>
+      <p><strong>Total before tax · $375.00</strong></p>
+      </article></details></section>
       <section><h2>What comes in the full kit</h2>
       <ol><li>Break down project hours and expenses.</li><li>Add deliverables, revision limits, and deadlines to your quote, then save it as a PDF.</li><li>Set a follow-up date and use the included message templates.</li></ol>
       ${enabled ? "<p>Test checkout · USD 19 · No real charge</p>" : "<p>Checkout is currently unavailable.</p>"}

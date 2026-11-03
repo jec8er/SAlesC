@@ -31,6 +31,26 @@ test("only a signed matching paid test session unlocks the buyer's download", as
   const address = server.address();
   assert(address && typeof address !== "string");
   const origin = "http://127.0.0.1:" + address.port;
+  assert.equal(
+    (await fetch(origin + "/store/quote-kit?source=guide")).status,
+    200,
+  );
+  const calculation = await fetch(
+    origin + "/store/quote-kit?source=guide&cost=300.05&margin=20",
+  );
+  assert.match(await calculation.text(), /\$375\.07/);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT source, event, count FROM quote_kit_metrics ORDER BY event",
+      )
+      .all()
+      .map((row) => [row.source, row.event, row.count]),
+    [
+      ["guide", "calculation", 1],
+      ["guide", "page_view", 1],
+    ],
+  );
   const download = origin + "/store/quote-kit/order/order?download=1";
   const buyer = { cookie: "orbit_quote_grant=" + grant };
   const send = (status: string, amount: number, signed = true) => {
