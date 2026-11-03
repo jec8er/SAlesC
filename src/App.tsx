@@ -222,26 +222,26 @@ export default function App() {
   return (
     <div className="login-shell">
       <section className="login-art">
-        <p className="eyebrow light">ORBIT / AGENTIC MARKET LAB</p>
+        <p className="eyebrow light">ORBIT / PRIVATE OPERATIONS</p>
         <h1>
-          Autonomous insight.
+          Clear objectives.
           <br />
-          <em>Human authority.</em>
+          <em>Verifiable work.</em>
         </h1>
         <p>
-          Research, strategy, risk and simulation.
+          Plan missions, record evidence and review results.
           <br />
           One auditable operating system.
         </p>
         <span className="login-monogram">O•</span>
-        <small>PAPER MODE · LIVE EXECUTION LOCKED</small>
+        <small>PRIVATE WORKSPACE · EXTERNAL EXECUTION NOT ENABLED</small>
       </section>
       <section className="login-form">
         <div>
           <ShieldCheck size={30} />
           <p className="eyebrow">SECURE CONTROL PLANE</p>
           <h2>Enter ORBIT.</h2>
-          <p>Authenticate to access your private agent network.</p>
+          <p>Sign in to your private operations workspace.</p>
           {!ready ? (
             <p>Checking your session…</p>
           ) : (
@@ -258,7 +258,7 @@ export default function App() {
                 autoFocus
               />
               <button disabled={busy} className="btn primary full">
-                {busy ? "Authenticating…" : "Open command center"}
+                {busy ? "Authenticating…" : "Open workspace"}
                 <ArrowRight size={16} />
               </button>
             </form>

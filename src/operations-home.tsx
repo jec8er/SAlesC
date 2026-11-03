@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { US_JURISDICTIONS } from "../lib/us-policy.mjs";
+import { blockerLabel } from "./mission-labels";
 
 type Mission = {
   id: string;
@@ -25,7 +26,7 @@ export default function OperationsHome({
     const controller = new AbortController();
     fetch("/api/business/missions", { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw Error("No se pudieron cargar las misiones.");
+        if (!response.ok) throw Error("Could not load saved missions.");
         const data = await response.json();
         setMissions(data.missions);
         setLoaded(true);
@@ -48,7 +49,7 @@ export default function OperationsHome({
         body: JSON.stringify({
           id: crypto.randomUUID(),
           goal:
-            "Validar un piloto: solicitudes, cotizaciones y seguimiento para " +
+            "Validate a pilot: inquiries, quotes and follow-up for " +
             String(fields.get("customer")),
           customer: String(fields.get("customer")),
           targetState: String(fields.get("state")),
@@ -60,41 +61,39 @@ export default function OperationsHome({
         }),
       });
       const data = await response.json();
-      if (!response.ok)
-        throw Error(data.error || "No se pudo guardar el piloto.");
+      if (!response.ok) throw Error(data.error || "Could not save the pilot.");
       setNotice(
-        "Piloto guardado. Abre las misiones para trabajar sus tareas; todavía no se ha ejecutado ni enviado nada.",
+        "Pilot saved. Open missions to work on its tasks. No work has been executed or sent externally.",
       );
       const refresh = await fetch("/api/business/missions");
       if (!refresh.ok)
         throw Error(
-          "El piloto se guardó, pero no se pudo actualizar la lista. Abre las misiones antes de volver a crearlo.",
+          "The pilot was saved, but the list could not refresh. Open missions before trying to create it again.",
         );
       setMissions((await refresh.json()).missions);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo guardar.");
+      setError(cause instanceof Error ? cause.message : "Could not save.");
     } finally {
       setBusy(false);
     }
   }
   return (
-    <section className="panel" style={{ padding: 28 }}>
-      <p className="eyebrow">ORBIT / OPERACIONES</p>
-      <h1>Un objetivo. Trabajo visible. Resultados comprobables.</h1>
+    <section className="panel operations-home" style={{ padding: 28 }}>
+      <p className="eyebrow">ORBIT / OPERATIONS</p>
+      <h1>One objective. Visible work. Verifiable results.</h1>
       <p>
-        Organiza la investigación, la oferta y la entrega de un servicio desde
-        un espacio privado.
+        Organize research, offers and service delivery in one private workspace.
       </p>
       <p>
-        <strong>Estado actual:</strong> planificación y registro de evidencias.
-        No hay un ejecutor autónomo conectado.
+        <strong>Current capability:</strong> planning and evidence tracking. No
+        autonomous commercial executor is connected.
       </p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <h2>Tu trabajo en curso</h2>
-      {!loaded && !error && <p role="status">Cargando misiones…</p>}
+      <h2>Your work in progress</h2>
+      {!loaded && !error && <p role="status">Loading missions…</p>}
       {loaded && missions.length === 0 && (
-        <p>No hay misiones guardadas. Prepara un piloto para empezar.</p>
+        <p>No saved missions yet. Prepare a pilot to get started.</p>
       )}
       {missions.map((mission) => (
         <article
@@ -105,32 +104,32 @@ export default function OperationsHome({
           <p>
             {mission.customer} ·{" "}
             {mission.tasks.filter((task) => task.status === "completed").length}
-            /{mission.tasks.length} tareas completadas
+            /{mission.tasks.length} tasks completed
           </p>
           <p>
             {mission.summary.launchBlocked
-              ? "Preparación pendiente"
-              : "Revisiones completadas; ejecución externa pendiente"}
+              ? "Preparation pending"
+              : "Reviews complete; external execution pending"}
           </p>
           {mission.summary.launchBlockers.length > 0 && (
             <ul>
               {mission.summary.launchBlockers.map((blocker, index) => (
-                <li key={index}>{blocker}</li>
+                <li key={index}>{blockerLabel(blocker)}</li>
               ))}
             </ul>
           )}
         </article>
       ))}
       <button className="neon-button" onClick={openMissions}>
-        Abrir misiones y evidencias
+        Open missions and evidence
       </button>
-      <h2>Preparar el primer piloto</h2>
+      <h2>Prepare the first pilot</h2>
       <p>
-        Hipótesis inicial: ayudar a un negocio de limpieza que ya recibe
-        consultas a organizar solicitudes y cotizaciones. Primero comprobaremos
-        el problema con un comprador.
+        Initial hypothesis: help a cleaning business organize the inquiries and
+        quotes it already receives. First, validate the problem with a buyer.
       </p>
       <form
+        className="mission-form"
         onSubmit={(event) => {
           event.preventDefault();
           void prepare(event.currentTarget);
@@ -138,16 +137,16 @@ export default function OperationsHome({
         style={{ display: "grid", gap: 12, maxWidth: 560 }}
       >
         <label>
-          Negocio o tipo de cliente
+          Business or customer type
           <input
             name="customer"
             required
             maxLength={500}
-            defaultValue="Pequeña empresa de limpieza"
+            defaultValue="Small cleaning business"
           />
         </label>
         <label>
-          Estado de EE. UU.
+          U.S. state
           <select name="state" defaultValue="NY" required>
             {US_JURISDICTIONS.map((state) => (
               <option key={state.code} value={state.code}>
@@ -157,32 +156,26 @@ export default function OperationsHome({
           </select>
         </label>
         <p>
-          Crear este plan no autoriza gastos ni envíos. Presupuesto externo: 0
-          USD. Tiempo inicial de planificación: 120 minutos.
+          Creating a plan does not authorize spending or sending. External
+          budget: USD 0. Initial planning time: 120 minutes.
         </p>
         <button
           className="neon-button"
           disabled={!loaded || busy || Boolean(notice)}
         >
-          {busy
-            ? "Guardando…"
-            : notice
-              ? "Piloto guardado"
-              : "Guardar plan del piloto"}
+          {busy ? "Saving…" : notice ? "Pilot saved" : "Save pilot plan"}
         </button>
       </form>
-      <h2>Cómo avanzaremos</h2>
+      <h2>How we move forward</h2>
       <ol>
-        <li>Confirmar un problema y guardar su evidencia.</li>
-        <li>Preparar una oferta con alcance y costos.</li>
-        <li>Revisar calidad y condiciones antes de una entrega.</li>
-        <li>
-          Preparar los materiales comerciales y medir pagos reales por separado.
-        </li>
+        <li>Confirm a problem and record the evidence.</li>
+        <li>Prepare an offer with a defined scope and costs.</li>
+        <li>Review quality and terms before delivery.</li>
+        <li>Prepare sales materials and measure actual payments separately.</li>
       </ol>
       <p>
-        Una tarea marcada como completada requiere un resultado registrado. Un
-        plan, una aprobación o una estimación no equivalen a una venta.
+        A completed task requires a recorded result. A plan, approval or
+        estimate does not establish a sale.
       </p>
     </section>
   );

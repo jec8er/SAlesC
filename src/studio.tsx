@@ -59,7 +59,7 @@ import {
 } from "../lib/domain";
 
 const nav = [
-  ["operations", "Inicio de operaciones", ListChecks],
+  ["operations", "Operations home", ListChecks],
   ["command", "Command center", Orbit],
   ["strategies", "Strategies", BrainCircuit],
   ["backtests", "Backtesting", BarChart3],
@@ -770,14 +770,14 @@ export default function Studio({
       <aside className="orbit-sidebar">
         <button
           className="orbit-brand"
-          onClick={() => setView("command")}
-          aria-label="Open ORBIT command center"
+          onClick={() => setView("operations")}
+          aria-label="Open ORBIT operations home"
         >
           <span className="orbit-logo">
             <Atom size={24} />
           </span>
           <span>
-            ORBIT<small>AGENTIC MARKET LAB</small>
+            ORBIT<small>PRIVATE OPERATIONS WORKSPACE</small>
           </span>
         </button>
         <p className="nav-kicker">OPERATIONS</p>
@@ -798,8 +798,8 @@ export default function Studio({
         <div className="mode-lock">
           <LockKeyhole size={16} />
           <div>
-            <strong>PAPER MODE</strong>
-            <small>Live execution locked</small>
+            <strong>PRIVATE WORKSPACE</strong>
+            <small>External execution not enabled</small>
           </div>
         </div>
         <div className="orbit-user">
@@ -821,21 +821,23 @@ export default function Studio({
           </div>
           <div className="header-actions">
             <span>{busy ? "SAVING" : loaded ? "SYNCED" : "CONNECTING"}</span>
-            <button
-              onClick={() => {
-                if (demo) {
-                  setDemo(false);
-                  load();
-                } else {
-                  setDemo(true);
-                  setWorkspace(demoWorkspace());
-                  setSelectedId("demo-btc");
-                  setLoaded(true);
-                }
-              }}
-            >
-              {demo ? "Exit demo" : "Load demo"}
-            </button>
+            {view !== "operations" && view !== "factory" && (
+              <button
+                onClick={() => {
+                  if (demo) {
+                    setDemo(false);
+                    load();
+                  } else {
+                    setDemo(true);
+                    setWorkspace(demoWorkspace());
+                    setSelectedId("demo-btc");
+                    setLoaded(true);
+                  }
+                }}
+              >
+                {demo ? "Exit demo" : "Load demo"}
+              </button>
+            )}
           </div>
         </header>
         {demo && (

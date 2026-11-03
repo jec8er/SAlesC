@@ -1308,10 +1308,8 @@ export function escapeHTML(s: string) {
       ]!,
   );
 }
-export function scriptFor(b: Business, p: Product, language: string) {
-  return language === "es"
-    ? `¿Buscas ${p.name.toLowerCase()}? En ${b.name} puedes pedir directamente. ${p.description || b.description} Precio: ${moneyLabel(p.price, b.currency)}. Escríbenos por WhatsApp para confirmar disponibilidad y coordinar entrega o recogida. ${b.name}: tu próximo pedido empieza aquí.`
-    : `Looking for ${p.name.toLowerCase()}? Order directly from ${b.name}. ${p.description || b.description} Priced at ${moneyLabel(p.price, b.currency)}. Message us on WhatsApp to confirm availability and arrange pickup or delivery. ${b.name}: your next order starts here.`;
+export function scriptFor(b: Business, p: Product, _language: string) {
+  return `Looking for ${p.name.toLowerCase()}? Order directly from ${b.name}. ${p.description || b.description} Priced at ${moneyLabel(p.price, b.currency)}. Message us on WhatsApp to confirm availability and arrange pickup or delivery. ${b.name}: your next order starts here.`;
 }
 export function catalogHTML(b: Business, products: Product[]) {
   const safe = (s: string) => escapeHTML(s);

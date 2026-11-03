@@ -18,7 +18,7 @@ autonomous agents running. The local scoring engine is deterministic, not a lang
 ## Implemented in this refinement
 
 - Operations is the default authenticated view.
-- Spanish guidance identifies the current capability boundary.
+- English guidance identifies the current capability boundary.
 - Mission status comes from the existing authenticated SQLite API, including
   completed tasks and blockers. No synthetic sales or financial progress.
 - An editable customer and state create a pilot mission with zero external budget,
@@ -26,6 +26,12 @@ autonomous agents running. The local scoring engine is deterministic, not a lang
 - Save and load errors are visible; a successful save is acknowledged before
   refreshing, so refresh failure does not suggest the original save failed.
 - Existing commercial review and trading restrictions remain in force.
+- Artifact and review inputs use inline forms instead of blocking browser prompts.
+  Actual cost, time and evidence are recorded, and the last review is visible.
+- Load, empty, saved and refresh-failure states are distinguished. A saved change
+  is not reported as failed merely because the subsequent list refresh failed.
+- Operations labels, generated pilot goals, errors and legacy script output are
+  English. Existing owner/customer-authored records are preserved as entered.
 
 ## Ten-step roadmap
 
@@ -77,7 +83,9 @@ revealing credentials. No sending, spending, publishing or billing is triggered.
 - All 68 existing automated tests passed, including authenticated mission creation,
   revision checks and restart persistence.
 - TypeScript, the production build and repository formatting passed.
-- The new screen has not been visually verified in a browser. These checks do not
-  constitute an end-to-end test of its form.
+- Browser verification on an isolated local SQLite fixture covered pilot creation,
+  task start, inline artifact submission with evidence and five measured minutes,
+  approval, dependency unlocking and persistence after reload. No buyer interviews,
+  real payments, customer deliveries or autonomous execution were performed.
 - Dependency installation reported three existing audit findings (one moderate,
   two high). Dependencies were not upgraded in this focused product change.
