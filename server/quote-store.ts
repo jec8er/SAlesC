@@ -21,6 +21,24 @@ export function mountQuoteStore(
   },
 ) {
   const { key, secret } = credentials;
+  const enabled = Boolean(
+    origin && secret && key && /^(sk|rk)_test_/.test(key),
+  );
+  app.get("/store/quote-kit", (_req, res) => {
+    res.set(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
+    );
+    res.set("Cache-Control", "no-store")
+      .send(`<!doctype html><html lang="en"><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>ORBIT Quote Kit</title><main><h1>ORBIT Quote Kit</h1>
+      <p>Price cleaning jobs, print customer quotes, and track follow-ups.</p>
+      ${enabled ? "<p>Test checkout · USD 19 · No real charge</p>" : "<p>Checkout is currently unavailable.</p>"}
+      ${enabled ? '<form method="post" action="/api/quote-kit/checkout"><button>Start test checkout</button></form>' : ""}
+      </main></html>`);
+  });
+
   if (!origin || !secret || !key || !/^(sk|rk)_test_/.test(key)) return;
   const stripe = new Stripe(key, { timeout: 10000, maxNetworkRetries: 1 });
   db.exec(`CREATE TABLE IF NOT EXISTS quote_kit_orders (
@@ -66,21 +84,6 @@ export function mountQuoteStore(
       return res.sendStatus(result.changes ? 204 : 503);
     },
   );
-
-  app.get("/store/quote-kit", (_req, res) => {
-    res.set(
-      "Content-Security-Policy",
-      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://checkout.stripe.com",
-    );
-    res.set("Cache-Control", "no-store")
-      .send(`<!doctype html><html lang="en"><meta charset="utf-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>ORBIT Quote Kit</title><main><h1>ORBIT Quote Kit</h1>
-      <p>Price cleaning jobs, print customer quotes, and track follow-ups.</p>
-      <p>Test checkout · USD 19 · No real charge</p>
-      <form method="post" action="/api/quote-kit/checkout"><button>Start test checkout</button></form>
-      </main></html>`);
-  });
 
   app.post("/api/quote-kit/checkout", async (req, res) => {
     if (req.get("origin") !== origin) return res.sendStatus(403);
