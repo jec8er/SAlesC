@@ -2,6 +2,10 @@
 
 ## Direction update — November 3, 2026
 
+English policy drafts and the unresolved publication checklist are in
+[`docs/policies.md`](docs/policies.md). These drafts do not activate billing,
+approve a launch or establish legal compliance.
+
 ORBIT now opens on a Spanish operations home: stored commercial missions,
 completed-task counts, launch blockers and a pilot-planning form for a small
 cleaning business. The form persists through the existing authenticated mission
