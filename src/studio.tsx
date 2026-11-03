@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import BusinessFactory from "./business-factory";
+import OperationsHome from "./operations-home";
 import {
   Activity,
   Accessibility,
@@ -58,6 +59,7 @@ import {
 } from "../lib/domain";
 
 const nav = [
+  ["operations", "Inicio de operaciones", ListChecks],
   ["command", "Command center", Orbit],
   ["strategies", "Strategies", BrainCircuit],
   ["backtests", "Backtesting", BarChart3],
@@ -216,7 +218,7 @@ export default function Studio({
 }) {
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [revision, setRevision] = useState(0);
-  const [view, setView] = useState<View>("command");
+  const [view, setView] = useState<View>("operations");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [demo, setDemo] = useState(false);
@@ -1365,6 +1367,12 @@ export default function Studio({
                   </section>
                 )}
               </>
+            )}
+            {view === "operations" && (
+              <OperationsHome
+                csrf={csrf}
+                openMissions={() => setView("factory")}
+              />
             )}
             {view === "factory" && <BusinessFactory csrf={csrf} />}
             {view === "agents" && (
