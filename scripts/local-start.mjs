@@ -145,6 +145,7 @@ export function startLocal(
           PORT: "3001",
           NODE_ENV: "development",
           PUBLIC_ORIGIN: "",
+          ORBIT_LOCAL_PASSWORDLESS: "true",
           OLLAMA_AUTO_DISCOVER: "false",
           OLLAMA_MODEL: "",
           QWEN_LOCAL_ENDPOINT: "",
@@ -155,15 +156,8 @@ export function startLocal(
     );
     return superviseChild(child);
   };
-  if (existsSync(resolve(root, ".env"))) return launch();
-  const setup = createSetupServer({
-    root,
-    onConfigured: () => setup.close(launch),
-  });
-  setup.on("error", (error) => console.error(error.message));
-  setup.listen(3002, "127.0.0.1", () =>
-    console.log("Create your password at http://127.0.0.1:3002"),
-  );
+  console.log("Open ORBIT at http://127.0.0.1:3001 (no password required)");
+  return launch();
 }
 
 if (

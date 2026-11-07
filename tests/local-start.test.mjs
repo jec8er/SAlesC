@@ -1,11 +1,47 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { scryptSync } from "node:crypto";
-import { EventEmitter } from "node:events";
-import { createSetupServer, superviseChild } from "../scripts/local-start.mjs";
+import { EventEmitter, once } from "node:events";
+import {
+  createSetupServer,
+  startLocal,
+  superviseChild,
+} from "../scripts/local-start.mjs";
+
+test("local launcher starts without setup or creating a password", async () => {
+  const root = await mkdtemp(join(tmpdir(), "orbit-launch-"));
+  try {
+    await mkdir(join(root, "server"));
+    await writeFile(
+      join(root, "server/start.ts"),
+      `
+      import { writeFileSync } from 'node:fs';
+      writeFileSync('launched.json', JSON.stringify({
+        passwordless: process.env.ORBIT_LOCAL_PASSWORDLESS,
+        host: process.env.HOST,
+        inference: process.env.OLLAMA_AUTO_DISCOVER
+      }));
+    `,
+    );
+    const child = startLocal(root);
+    const [code] = await once(child, "exit");
+    assert.equal(code, 0);
+    assert.deepEqual(
+      JSON.parse(await readFile(join(root, "launched.json"), "utf8")),
+      {
+        passwordless: "true",
+        host: "127.0.0.1",
+        inference: "false",
+      },
+    );
+    await assert.rejects(readFile(join(root, ".env")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 async function fixture(t) {
   const prefix = join(tmpdir(), "orbit-setup-");

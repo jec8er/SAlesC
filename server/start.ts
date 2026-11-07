@@ -5,6 +5,10 @@ import { createStripeBillingGateway } from "./billing.ts";
 import { createQwenAdapter } from "../lib/qwen-adapter.ts";
 import { createOllamaAdapter } from "../lib/ollama-adapter.ts";
 const port = Number(process.env.PORT || 3001);
+const host = process.env.HOST || "127.0.0.1";
+const localPasswordless = process.env.ORBIT_LOCAL_PASSWORDLESS === "true";
+if (localPasswordless && !["127.0.0.1", "::1"].includes(host))
+  throw Error("Password-free access requires a loopback HOST");
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw Error("Invalid PORT");
 const stripeValues = [
@@ -45,6 +49,7 @@ const qwenAdapter =
 const { app, close } = createApplication({
   databasePath: process.env.DATABASE_PATH || "data/studio.sqlite",
   passwordHash: process.env.OWNER_PASSWORD_HASH || "",
+  localPasswordless,
   name: process.env.OWNER_NAME || "Juan",
   production: process.env.NODE_ENV === "production",
   publicOrigin: process.env.PUBLIC_ORIGIN,
@@ -58,7 +63,7 @@ const { app, close } = createApplication({
   ecomodaInfer: qwenAdapter.infer,
   billing,
 });
-const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
+const server = app.listen(port, host, () =>
   console.log(`ORBIT listening on port ${port}`),
 );
 for (const signal of ["SIGINT", "SIGTERM"] as const)

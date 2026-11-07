@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { request } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,99 @@ import { createProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
 import type { BillingGateway } from "../server/billing.ts";
 const testPassword = "fixture-password-not-a-real-credential";
 const hash = passwordHash(testPassword);
+test("password-free local access creates a session and preserves CSRF checks", async () => {
+  const s = await running(":memory:", {
+    passwordHash: "",
+    localPasswordless: true,
+  });
+  try {
+    const response = await fetch(s.origin + "/api/session");
+    assert.equal(response.status, 200);
+    const { csrf, passwordless } = await response.json();
+    assert.equal(passwordless, true);
+    const cookie = response.headers.get("set-cookie")!.split(";")[0];
+    const workspaceResponse = await fetch(s.origin + "/api/workspace", {
+      headers: { cookie },
+    });
+    assert.equal(workspaceResponse.status, 200);
+    const workspace = await workspaceResponse.json();
+    const headers = { cookie, "Content-Type": "application/json" };
+    const rejected = await fetch(s.origin + "/api/workspace", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(workspace),
+    });
+    assert.equal(rejected.status, 403);
+    const saved = await fetch(s.origin + "/api/workspace", {
+      method: "PUT",
+      headers: { ...headers, "X-CSRF-Token": csrf },
+      body: JSON.stringify(workspace),
+    });
+    assert.equal(saved.status, 200);
+    assert.equal((await saved.json()).revision, workspace.revision + 1);
+  } finally {
+    await s.close();
+  }
+});
+
+test("password-free access rejects foreign origins, cross-site GETs and rebinding hosts", async () => {
+  const s = await running(":memory:", {
+    passwordHash: "",
+    localPasswordless: true,
+  });
+  try {
+    const rejectedHeaders: Record<string, string>[] = [
+      { Origin: "https://untrusted.example" },
+      { "Sec-Fetch-Site": "cross-site" },
+      { Host: "untrusted.example" },
+    ];
+    for (const headers of rejectedHeaders) {
+      await new Promise<void>((done, reject) => {
+        request(s.origin + "/api/session", { headers }, (r) => {
+          r.resume();
+          r.on("end", () => {
+            try {
+              assert.equal(r.statusCode, 403, JSON.stringify(headers));
+              assert.equal(r.headers["set-cookie"], undefined);
+              done();
+            } catch (error) {
+              reject(error);
+            }
+          });
+        })
+          .on("error", reject)
+          .end();
+      });
+    }
+    const r = await fetch(s.origin + "/api/session", {
+      headers: { Origin: s.origin },
+    });
+    assert.equal(r.status, 200);
+  } finally {
+    await s.close();
+  }
+});
+
+test("password-free access cannot be configured for production or a public origin", () => {
+  for (const extra of [
+    { production: true },
+    { publicOrigin: "https://orbit.example" },
+  ])
+    assert.throws(
+      () =>
+        createApplication({
+          databasePath: ":memory:",
+          passwordHash: "",
+          localPasswordless: true,
+          ...extra,
+        }),
+      /only available locally/,
+    );
+  assert.throws(
+    () => createApplication({ databasePath: ":memory:", passwordHash: "" }),
+    /OWNER_PASSWORD_HASH/,
+  );
+});
 async function running(databasePath = ":memory:", extra = {}) {
   const runtime = createApplication({
     databasePath,

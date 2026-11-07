@@ -35,6 +35,7 @@ import {
 export type Config = {
   databasePath: string;
   passwordHash: string;
+  localPasswordless?: boolean;
   name?: string;
   production?: boolean;
   publicOrigin?: string;
@@ -48,7 +49,9 @@ export type Config = {
   billing?: BillingGateway;
 };
 export function createApplication(config: Config) {
-  if (!validPasswordHash(config.passwordHash))
+  if (config.localPasswordless && (config.production || config.publicOrigin))
+    throw Error("Password-free access is only available locally");
+  if (!config.localPasswordless && !validPasswordHash(config.passwordHash))
     throw Error("Set OWNER_PASSWORD_HASH using npm run password:hash");
   const now = config.now || Date.now;
   const ecomodaTimeoutMs = config.ecomodaTimeoutMs ?? 120000;
@@ -91,6 +94,21 @@ export function createApplication(config: Config) {
   if (config.ecomodaInfer && config.ecomodaStore) serviceWorker.start();
   const app = express();
   app.disable("x-powered-by");
+  if (config.localPasswordless)
+    app.use((req, res, next) => {
+      const port = req.socket.localPort;
+      const hosts = [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`];
+      const addresses = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
+      const origin = req.get("origin");
+      if (
+        !addresses.includes(req.socket.remoteAddress || "") ||
+        !hosts.includes(req.get("host") || "") ||
+        (origin && origin !== `http://${req.get("host")}`) ||
+        req.get("sec-fetch-site") === "cross-site"
+      )
+        return res.status(403).json({ error: "Local access only" });
+      next();
+    });
   app.use((req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",
@@ -204,6 +222,20 @@ export function createApplication(config: Config) {
     next();
   }
   const attempts = new Map<string, { count: number; until: number }>();
+  function createSession(res: Response) {
+    const t = now();
+    db.prepare("DELETE FROM sessions WHERE expires<=?").run(t);
+    const tok = randomBytes(32).toString("hex"),
+      csrf = randomBytes(32).toString("hex");
+    db.prepare(
+      "INSERT INTO sessions(token_hash,csrf,expires) VALUES(?,?,?)",
+    ).run(digest(tok), csrf, t + 86400000);
+    db.prepare(
+      "DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions ORDER BY expires DESC LIMIT -1 OFFSET 100)",
+    ).run();
+    res.set("Set-Cookie", cookie(tok));
+    return { csrf };
+  }
   app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/billing/config", (_req, res) =>
     res.json({
@@ -246,11 +278,17 @@ export function createApplication(config: Config) {
     }
   });
   app.get("/api/session", (req, res) => {
-    const s = session(req);
+    const s = session(req) || (config.localPasswordless && createSession(res));
     if (!s) return res.status(401).json({ error: "Sign in required" });
-    res.json({ name: config.name || "Juan", csrf: s.csrf });
+    res.json({
+      name: config.name || "Juan",
+      csrf: s.csrf,
+      passwordless: Boolean(config.localPasswordless),
+    });
   });
   app.post("/api/login", (req, res) => {
+    if (config.localPasswordless)
+      return res.status(409).json({ error: "No password is required locally" });
     const ip = req.ip || "unknown";
     const t = now();
     for (const [key, a] of attempts) if (a.until <= t) attempts.delete(key);
@@ -269,16 +307,7 @@ export function createApplication(config: Config) {
       return res.status(401).json({ error: "Incorrect owner password" });
     }
     attempts.delete(ip);
-    db.prepare("DELETE FROM sessions WHERE expires<=?").run(t);
-    const tok = randomBytes(32).toString("hex"),
-      csrf = randomBytes(32).toString("hex");
-    db.prepare(
-      "INSERT INTO sessions(token_hash,csrf,expires) VALUES(?,?,?)",
-    ).run(digest(tok), csrf, t + 86400000);
-    db.prepare(
-      "DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions ORDER BY expires DESC LIMIT -1 OFFSET 100)",
-    ).run();
-    res.set("Set-Cookie", cookie(tok));
+    const { csrf } = createSession(res);
     res.json({ name: config.name || "Juan", csrf });
   });
   app.post("/api/logout", auth, (req, res) => {
