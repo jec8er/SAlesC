@@ -79,7 +79,7 @@ export function createSetupServer({ root, onConfigured = () => {} }) {
           blockedUntil = Date.now() + 900000;
           failures = 0;
         }
-        return reply(400, { error: "Passwords must match (12–512 characters)" });
+        return reply(400, { error: "Passwords must match (12–512 chars)" });
       }
       const salt = randomBytes(16).toString("hex");
       const key = scryptSync(data.password, salt, 64).toString("hex");
