@@ -12,7 +12,7 @@ npm run build
 npm run start:local
 ```
 
-Open **http://127.0.0.1:3001**. Local startup opens your workspace directly, with no password or setup page. It creates no password and preserves existing configuration and saved data. `start:local` binds to loopback only and disables Qwen/Ollama inference. Local browser sessions and CSRF checks remain enabled; foreign origins and non-loopback hosts are rejected. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. No hosting, models or paid services are activated.
+Open **http://127.0.0.1:3001**. Local startup opens your workspace directly, with no password or setup page. It creates no password and preserves existing configuration and saved data. `start:local` binds to loopback only. When Ollama is running on this computer at `127.0.0.1:11434`, ORBIT discovers an installed Qwen model of up to 8B parameters on the first office run and sends inference requests to that local Ollama service. Install Ollama and download a compatible Qwen model separately; ORBIT does not install software or download model weights. If Ollama or a compatible model is missing, the office run reports the connection/model error. This launcher clears remote Qwen endpoints and API keys, so it does not send office briefs to a cloud model. Local browser sessions and CSRF checks remain enabled; foreign origins and non-loopback hosts are rejected. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. No hosting or paid services are activated.
 
 Password-free access is available only through the local launcher. Public/production deployments continue to require owner authentication. The optional `npm run setup` command configures password-based access for that separate mode.
 
