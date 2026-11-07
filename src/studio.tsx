@@ -68,6 +68,7 @@ type View =
   | "strategies"
   | "backtests"
   | "agents"
+  | "factory"
   | "risk"
   | "ledger"
   | "trust"
