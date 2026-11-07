@@ -537,10 +537,10 @@ export function createApplication(config: Config) {
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid office brief" });
     const adapter = config.qwenAdapter;
-    if (!adapter || adapter.status().status !== "ready")
+    if (!adapter)
       return res.status(423).json({
         error:
-          "The office is blocked until a real Qwen/Ollama adapter is ready.",
+          "The office is blocked because no Qwen/Ollama adapter is connected.",
       });
     const row = db
       .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
@@ -562,7 +562,9 @@ export function createApplication(config: Config) {
             role: "Betty",
             instructions: `Office employee role: ${role}. ${instructions}`,
             input,
-            signal,
+            signal: signal
+              ? AbortSignal.any([signal, AbortSignal.timeout(ecomodaTimeoutMs)])
+              : AbortSignal.timeout(ecomodaTimeoutMs),
           }),
         new Date(now()).toISOString(),
       );
