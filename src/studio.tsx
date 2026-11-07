@@ -55,9 +55,15 @@ import {
   tradingState,
   workspaceSchema,
 } from "../lib/domain";
+import {
+  emptyOfficeWorkspace,
+  officeStageSchema,
+  type OfficeWorkspace,
+} from "../lib/office";
 
 const nav = [
   ["command", "Command center", Orbit],
+  ["office", "Content office", Bot],
   ["strategies", "Strategies", BrainCircuit],
   ["backtests", "Backtesting", BarChart3],
   ["agents", "Agent network", Bot],
@@ -233,6 +239,7 @@ export default function Studio({
     annualRunRate: number;
   } | null>(null);
   const trading = tradingState(workspace);
+  const office: OfficeWorkspace = workspace.office || emptyOfficeWorkspace();
   const metrics = paperMetrics(trading);
   const selected =
     trading.strategies.find((item) => item.id === selectedId) ||
@@ -271,6 +278,21 @@ export default function Studio({
       if (!response.ok) throw Error(data.error || "Unable to open ORBIT");
       setWorkspace(workspaceSchema.parse(data.workspace));
       setRevision(data.revision);
+      try {
+        const officeResponse = await fetch("/api/office/status");
+        if (officeResponse.ok) {
+          const officeData = (await officeResponse.json()) as {
+            office: OfficeWorkspace;
+            revision: number;
+          };
+          setWorkspace((current) =>
+            workspaceSchema.parse({ ...current, office: officeData.office }),
+          );
+          setRevision(officeData.revision);
+        }
+      } catch {
+        // The workspace remains usable when the optional office status surface is unavailable.
+      }
       setLoaded(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to open ORBIT");
@@ -309,6 +331,7 @@ export default function Studio({
       setError(parsed.error.issues.map((issue) => issue.message).join("; "));
       return false;
     }
+
     if (demo) {
       setWorkspace(parsed.data);
       setToast(`${message} · demo only`);
@@ -337,6 +360,39 @@ export default function Studio({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save");
       return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function advanceOffice() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/office/advance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ revision }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        office?: OfficeWorkspace;
+        revision?: number;
+      };
+      if (response.status === 401)
+        window.dispatchEvent(new Event("session-expired"));
+      if (!response.ok) throw Error(data.error || "Office stage is blocked");
+      if (data.office && data.revision !== undefined) {
+        setWorkspace((current) =>
+          workspaceSchema.parse({ ...current, office: data.office }),
+        );
+        setRevision(data.revision);
+        setToast(`Office advanced to ${data.office.currentStage}`);
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Office stage is blocked",
+      );
     } finally {
       setBusy(false);
     }
@@ -862,6 +918,13 @@ export default function Studio({
           </div>
         ) : (
           <div className="orbit-content">
+            {view === "office" && (
+              <OfficePanel
+                office={office}
+                busy={busy}
+                onAdvance={() => void advanceOffice()}
+              />
+            )}
             {view === "command" && (
               <>
                 <section className="command-hero">
@@ -2221,6 +2284,138 @@ function PageTitle({
     </div>
   );
 }
+function OfficePanel({
+  office,
+  busy,
+  onAdvance,
+}: {
+  office: OfficeWorkspace;
+  busy: boolean;
+  onAdvance: () => void;
+}) {
+  const stages = officeStageSchema.options;
+  const currentIndex = stages.indexOf(office.currentStage);
+  return (
+    <div className="view-stack">
+      <section className="command-hero">
+        <div>
+          <p className="signal-label">CONTENT OPERATIONS / 18 AGENTS</p>
+          <h1>
+            The content office is <em>evidence-bound.</em>
+          </h1>
+          <p>
+            Research, create, review, publish, and analyze for TikTok and
+            YouTube. Agents propose; connectors and the owner authorize external
+            actions.
+          </p>
+        </div>
+        <div className="hero-status">
+          <strong>{office.currentStage.replaceAll("_", " ")}</strong>
+          <small>Current workflow stage</small>
+        </div>
+      </section>
+      <section className="metric-strip">
+        <Metric label="Agents" value="18" note="Explicit handoff roster" />
+        <Metric
+          label="Handoffs"
+          value={String(office.handoffs.length)}
+          note="Recorded in the office trail"
+        />
+        <Metric
+          label="Verified revenue"
+          value={String(office.verifiedRevenue.length)}
+          note="Claims are not revenue evidence"
+        />
+        <Metric
+          label="Rewards"
+          value={String(office.rewards.length)}
+          note="Only verified payouts qualify"
+        />
+      </section>
+      <section className="dashboard-grid">
+        <section className="glass-panel">
+          <div className="panel-head">
+            <div>
+              <p className="signal-label">WORKFLOW</p>
+              <h2>Stage gates</h2>
+            </div>
+            <button
+              className="neon-button"
+              disabled={busy || currentIndex === stages.length - 1}
+              onClick={onAdvance}
+            >
+              <ChevronRight size={15} /> Advance
+            </button>
+          </div>
+          <div className="agent-stream">
+            {stages.map((stage, index) => (
+              <div className="stream-row" key={stage}>
+                <span>{stage.replaceAll("_", " ")}</span>
+                <small>
+                  {index === currentIndex
+                    ? "CURRENT"
+                    : index < currentIndex
+                      ? "COMPLETE"
+                      : "WAITING"}
+                </small>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="glass-panel">
+          <div className="panel-head">
+            <div>
+              <p className="signal-label">CONNECTORS</p>
+              <h2>External actions stay gated</h2>
+            </div>
+            <span className="status-chip paused">
+              {office.qwen.status === "ready" ? "QWEN READY" : "QWEN BLOCKED"}
+            </span>
+          </div>
+          <div className="agent-stream">
+            {office.connectors.map((connector) => (
+              <div className="stream-row" key={connector.id}>
+                <span>
+                  <strong>{connector.label}</strong>
+                  <small>{connector.detail}</small>
+                </span>
+                <b>{connector.status.replaceAll("_", " ")}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+      </section>
+      <section className="glass-panel">
+        <div className="panel-head">
+          <div>
+            <p className="signal-label">PHYSICAL OFFICE ROSTER</p>
+            <h2>Every handoff has an owner</h2>
+          </div>
+          <small>
+            No generated output is stored while Qwen is disconnected.
+          </small>
+        </div>
+        <div className="agent-grid">
+          {office.agents.map((agent) => (
+            <div className="agent-tile" key={agent.id}>
+              <Bot size={16} />
+              <strong>{agent.name}</strong>
+              <small>{agent.specialty}</small>
+              <span>{agent.state}</span>
+            </div>
+          ))}
+        </div>
+        {office.handoffs.length === 0 && (
+          <p className="empty-state">
+            No handoffs recorded. Configure a real Qwen adapter and platform
+            connectors before the office can produce or publish.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function Metric({
   label,
   value,

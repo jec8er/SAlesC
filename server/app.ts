@@ -12,6 +12,12 @@ import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
 import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
 import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
 import {
+  advanceOfficeStage,
+  emptyOfficeWorkspace,
+  officeWorkspaceSchema,
+} from "../lib/office.ts";
+import type { QwenAdapter } from "../lib/qwen-adapter.ts";
+import {
   billingPlans,
   type BillingGateway,
   type BillingPlan,
@@ -28,6 +34,7 @@ export type Config = {
   ecomodaInfer?: EcomodaInference;
   ecomodaTimeoutMs?: number;
   ecomodaMemory?: ProjectMemoryStore;
+  qwenAdapter?: QwenAdapter;
   billing?: BillingGateway;
 };
 export function createApplication(config: Config) {
@@ -265,6 +272,97 @@ export function createApplication(config: Config) {
       .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
       .get("owner") as { payload: string; revision: number };
     res.json({ workspace: JSON.parse(row.payload), revision: row.revision });
+  });
+  app.get("/api/office/status", auth, (_req, res) => {
+    const row = db
+      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
+      .get("owner") as { payload: string; revision: number };
+    const workspace = JSON.parse(row.payload) as { office?: unknown };
+    const office = officeWorkspaceSchema.parse(
+      workspace.office || emptyOfficeWorkspace(),
+    );
+    const qwen = config.qwenAdapter?.status() || office.qwen;
+    res.json({
+      office: { ...office, qwen },
+      revision: row.revision,
+      connectors: office.connectors.map((connector) =>
+        connector.id === "qwen"
+          ? {
+              ...connector,
+              status: qwen.status === "ready" ? "ready" : qwen.status,
+              detail:
+                qwen.status === "ready"
+                  ? "Local Qwen adapter is configured."
+                  : "Local Qwen adapter is not configured.",
+            }
+          : connector,
+      ),
+    });
+  });
+  const officeAdvance = z
+    .object({
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict();
+  app.post("/api/office/advance", auth, (req, res) => {
+    const parsed = officeAdvance.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid office stage request" });
+    const row = db
+      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
+      .get("owner") as { payload: string; revision: number };
+    if (row.revision !== parsed.data.revision)
+      return res
+        .status(409)
+        .json({ error: "Workspace changed. Reload first." });
+    const workspace = JSON.parse(row.payload) as {
+      office?: unknown;
+      [key: string]: unknown;
+    };
+    const office = officeWorkspaceSchema.parse(
+      workspace.office || emptyOfficeWorkspace(),
+    );
+    const qwen = config.qwenAdapter?.status() || office.qwen;
+    const withQwen = officeWorkspaceSchema.parse({
+      ...office,
+      qwen,
+      connectors: office.connectors.map((connector) =>
+        connector.id === "qwen"
+          ? {
+              ...connector,
+              status: qwen.status === "ready" ? "ready" : qwen.status,
+              detail:
+                qwen.status === "ready"
+                  ? "Local Qwen adapter is configured."
+                  : "Local Qwen adapter is not configured.",
+            }
+          : connector,
+      ),
+    });
+    const advanced = advanceOfficeStage(
+      withQwen,
+      new Date(now()).toISOString(),
+    );
+    if (advanced.blocked)
+      return res.status(423).json({
+        error: advanced.blocked,
+        office: withQwen,
+        revision: row.revision,
+      });
+    const nextWorkspace = { ...workspace, office: advanced.office };
+    const changed = db
+      .prepare(
+        "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
+      )
+      .run(JSON.stringify(nextWorkspace), "owner", row.revision);
+    if (!changed.changes)
+      return res
+        .status(409)
+        .json({ error: "Workspace changed. Reload first." });
+    res.json({
+      office: advanced.office,
+      revision: row.revision + 1,
+    });
   });
   app.get("/api/billing/summary", auth, (_req, res) => {
     const subscriptions = db
