@@ -12,20 +12,28 @@ test("queued requests run through inference and survive restart without duplicat
   let calls = 0;
   const infer = async ({ role }) => {
     calls++;
-    return role === "Marcela" ? '{"accepted":true,"defects":[]}' : "Evidence-based artifact";
+    return role === "Marcela"
+      ? '{"accepted":true,"defects":[]}'
+      : "Evidence-based artifact";
   };
   const store = createFileStore(root);
   const worker = createServiceWorker({ db, store, infer });
   try {
     worker.enqueue("job-1", "Create a description from these supplied facts.");
-    assert.throws(() => worker.enqueue("job-1", "Different task"), /already used/);
+    assert.throws(
+      () => worker.enqueue("job-1", "Different task"),
+      /already used/,
+    );
     assert.equal((await worker.tick()).status, "awaiting_artifact_validation");
     assert.equal(calls, 3);
     assert.equal((await worker.tick()).status, "idle");
     // Simulate interruption between durable finish and the queue update.
     db.prepare("UPDATE service_jobs SET status='running'").run();
     const restarted = createServiceWorker({ db, store, infer });
-    assert.equal((await restarted.tick()).status, "awaiting_artifact_validation");
+    assert.equal(
+      (await restarted.tick()).status,
+      "awaiting_artifact_validation",
+    );
     assert.equal(calls, 3);
     assert.equal(restarted.summary().targetUsd, 2000000);
     await restarted.stop();
@@ -41,8 +49,12 @@ test("failures back off and stop after three attempts", async () => {
   const db = new DatabaseSync(":memory:");
   let clock = 0;
   const worker = createServiceWorker({
-    db, store: createFileStore(root), now: () => clock,
-    infer: async () => { throw Error("offline"); },
+    db,
+    store: createFileStore(root),
+    now: () => clock,
+    infer: async () => {
+      throw Error("offline");
+    },
   });
   try {
     worker.enqueue("offline", "Write a brief");
