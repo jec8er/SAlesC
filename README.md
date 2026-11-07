@@ -12,7 +12,7 @@ npm run build
 npm run start:local
 ```
 
-Open **http://127.0.0.1:3001**. Local startup opens your workspace directly, with no password or setup page. It creates no password and preserves existing configuration and saved data. `start:local` binds to loopback only and disables Qwen/Ollama inference. Local browser sessions and CSRF checks remain enabled; foreign origins and non-loopback hosts are rejected. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. No hosting, models or paid services are activated.
+Open **http://127.0.0.1:3001**. Local startup opens your workspace directly, with no password or setup page. It creates no password and preserves existing configuration and saved data. `start:local` binds to loopback only and runs the deterministic ORBIT market laboratory without model downloads or external inference. Local browser sessions and CSRF checks remain enabled; foreign origins and non-loopback hosts are rejected. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. No hosting, models or paid services are activated.
 
 Password-free access is available only through the local launcher. Public/production deployments continue to require owner authentication. The optional `npm run setup` command configures password-based access for that separate mode.
 
@@ -23,7 +23,6 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Direct local access without a password; owner-password sign-in for hosted mode, with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
-- An evidence-bound content office with 18 specialist agents for TikTok and YouTube, linked to audit-passed ORBIT missions before creation, review or distribution.
 - ORBIT Intelligence V1: a local, deterministic multi-agent council that independently scores evidence, strategy quality, risk, compliance, execution history and audit consistency.
 - Agent Operations V2: a mission board that preserves the ordered Scout → Strategist → Risk → Compliance → Executor → Auditor handoff, exposes each output and evidence reference, and withholds the owner gate when audit findings remain.
 - Local browser voice briefings for mission summaries. Audio uses the device speech engine; no mission data is sent to an AI or speech provider by ORBIT.

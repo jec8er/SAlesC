@@ -1,8 +1,8 @@
 # ORBIT repository instructions
 
 Work from the latest `main` and inspect open pull requests before changing code.
-ORBIT is one independent agentic market laboratory, not separate SaborClick,
-Ecomoda, trading, or Sites apps.
+ORBIT is one independent agentic market laboratory focused on decision support,
+risk controls, paper simulation and audit.
 
 ## Product priorities
 
@@ -32,7 +32,6 @@ Ecomoda, trading, or Sites apps.
 - Do not add Sites, Cloudflare, a third-party database, paid inference, paid market data, automatic outreach, automatic publishing, or brokerage dependencies without an explicit product decision.
 - Stripe subscription changes must keep secrets server-side, use restricted keys, hosted Checkout, signature-verified idempotent webhooks and first-class Customer/Subscription identifiers. Never grant access from a success page alone.
 - Do not enable automatic tax collection until active registrations and tax obligations are confirmed.
-- ORBIT project memory remains curated and revision-safe; generated content is not technical validation.
 - Treat Trust Center statuses as evidence labels, not certifications. Never claim legal compliance, lawsuit prevention, accessibility conformance or regulatory approval from a checklist alone.
 - Keep public launch blocked while a Trust Center item requires owner action or professional review. Do not invent legal policies, business details, consent records or audit results.
 - Do not edit `legacy/` unless a task explicitly targets historical files.

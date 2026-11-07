@@ -1,4 +1,3 @@
-import { createServiceWorker } from "./service-worker.mjs";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { DatabaseSync } from "node:sqlite";
@@ -8,25 +7,6 @@ import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { emptyWorkspace, workspaceSchema } from "../lib/domain.ts";
 import { digest, verifyPassword, validPasswordHash } from "./auth.ts";
-import { runCycle } from "../lib/ecomoda-core.mjs";
-import {
-  createMission,
-  startTask,
-  submitArtifact,
-  reviewTask,
-  missionSummary,
-} from "../lib/business-factory.mjs";
-import { jurisdictionByCode } from "../lib/us-policy.mjs";
-import type { EcomodaFileStore } from "../lib/ecomoda-file-store.mjs";
-import type { EcomodaInference } from "../lib/ecomoda-core.mjs";
-import type { ProjectMemoryStore } from "../lib/ecomoda-project-memory.mjs";
-import {
-  advanceOfficeStage,
-  emptyOfficeWorkspace,
-  officeWorkspaceSchema,
-  runOfficeStage,
-} from "../lib/office.ts";
-import type { QwenAdapter } from "../lib/qwen-adapter.ts";
 import {
   billingPlans,
   type BillingGateway,
@@ -41,11 +21,6 @@ export type Config = {
   publicOrigin?: string;
   staticDir?: string;
   now?: () => number;
-  ecomodaStore?: EcomodaFileStore;
-  ecomodaInfer?: EcomodaInference;
-  ecomodaTimeoutMs?: number;
-  ecomodaMemory?: ProjectMemoryStore;
-  qwenAdapter?: QwenAdapter;
   billing?: BillingGateway;
 };
 export function createApplication(config: Config) {
@@ -54,13 +29,6 @@ export function createApplication(config: Config) {
   if (!config.localPasswordless && !validPasswordHash(config.passwordHash))
     throw Error("Set OWNER_PASSWORD_HASH using npm run password:hash");
   const now = config.now || Date.now;
-  const ecomodaTimeoutMs = config.ecomodaTimeoutMs ?? 120000;
-  if (
-    !Number.isInteger(ecomodaTimeoutMs) ||
-    ecomodaTimeoutMs < 10 ||
-    ecomodaTimeoutMs > 300000
-  )
-    throw Error("ECOMODA timeout must be between 10 and 300000 milliseconds");
   if (config.production && !config.publicOrigin)
     throw Error("PUBLIC_ORIGIN is required in production");
   if (config.publicOrigin) {
@@ -84,14 +52,6 @@ export function createApplication(config: Config) {
   db.prepare(
     "INSERT OR IGNORE INTO workspaces(owner_id,payload,revision) VALUES(?,?,0)",
   ).run("owner", JSON.stringify(emptyWorkspace()));
-  const serviceWorker = createServiceWorker({
-    db,
-    infer: config.ecomodaInfer,
-    store: config.ecomodaStore,
-    now,
-    timeoutMs: ecomodaTimeoutMs,
-  });
-  if (config.ecomodaInfer && config.ecomodaStore) serviceWorker.start();
   const app = express();
   app.disable("x-powered-by");
   if (config.localPasswordless)
@@ -464,212 +424,6 @@ export function createApplication(config: Config) {
       .get("owner") as { payload: string; revision: number };
     res.json({ workspace: JSON.parse(row.payload), revision: row.revision });
   });
-  app.get("/api/office/status", auth, (_req, res) => {
-    const row = db
-      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
-      .get("owner") as { payload: string; revision: number };
-    const workspace = JSON.parse(row.payload) as { office?: unknown };
-    const office = officeWorkspaceSchema.parse(
-      workspace.office || emptyOfficeWorkspace(),
-    );
-    const qwen = config.qwenAdapter?.status() || office.qwen;
-    const connectors = office.connectors.map((connector) =>
-      connector.id === "qwen"
-        ? {
-            ...connector,
-            status: qwen.status === "ready" ? "ready" : qwen.status,
-            detail:
-              qwen.status === "ready"
-                ? "Local Qwen adapter is configured."
-                : "Local Qwen adapter is not configured.",
-          }
-        : connector,
-    );
-    res.json({
-      office: { ...office, qwen, connectors },
-      revision: row.revision,
-    });
-  });
-  const officeAdvance = z
-    .object({
-      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    })
-    .strict();
-  app.post("/api/office/advance", auth, (req, res) => {
-    const parsed = officeAdvance.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid office stage request" });
-    const row = db
-      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
-      .get("owner") as { payload: string; revision: number };
-    if (row.revision !== parsed.data.revision)
-      return res
-        .status(409)
-        .json({ error: "Workspace changed. Reload first." });
-    const workspace = JSON.parse(row.payload) as {
-      office?: unknown;
-      [key: string]: unknown;
-    };
-    const office = officeWorkspaceSchema.parse(
-      workspace.office || emptyOfficeWorkspace(),
-    );
-    const qwen = config.qwenAdapter?.status() || office.qwen;
-    const withQwen = officeWorkspaceSchema.parse({
-      ...office,
-      qwen,
-      connectors: office.connectors.map((connector) =>
-        connector.id === "qwen"
-          ? {
-              ...connector,
-              status: qwen.status === "ready" ? "ready" : qwen.status,
-              detail:
-                qwen.status === "ready"
-                  ? "Local Qwen adapter is configured."
-                  : "Local Qwen adapter is not configured.",
-            }
-          : connector,
-      ),
-    });
-    const advanced = advanceOfficeStage(
-      withQwen,
-      new Date(now()).toISOString(),
-    );
-    if (advanced.blocked)
-      return res.status(423).json({
-        error: advanced.blocked,
-        office: withQwen,
-        revision: row.revision,
-      });
-    const nextWorkspace = { ...workspace, office: advanced.office };
-    const changed = db
-      .prepare(
-        "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
-      )
-      .run(JSON.stringify(nextWorkspace), "owner", row.revision);
-    if (!changed.changes)
-      return res
-        .status(409)
-        .json({ error: "Workspace changed. Reload first." });
-    res.json({
-      office: advanced.office,
-      revision: row.revision + 1,
-    });
-  });
-  const officeRun = z
-    .object({
-      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-      brief: z.string().trim().min(1).max(1200),
-    })
-    .strict();
-  app.post("/api/office/run", auth, async (req, res) => {
-    const parsed = officeRun.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid office brief" });
-    const adapter = config.qwenAdapter;
-    if (!adapter)
-      return res.status(423).json({
-        error:
-          "The office is blocked because no Qwen/Ollama adapter is connected.",
-      });
-    const row = db
-      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
-      .get("owner") as { payload: string; revision: number };
-    if (row.revision !== parsed.data.revision)
-      return res
-        .status(409)
-        .json({ error: "Workspace changed. Reload first." });
-    const workspace = workspaceSchema.parse(JSON.parse(row.payload));
-    const office = officeWorkspaceSchema.parse(
-      workspace.office || emptyOfficeWorkspace(),
-    );
-    try {
-      const ran = await runOfficeStage(
-        office,
-        parsed.data.brief,
-        ({ role, instructions, input, signal }) =>
-          adapter.infer({
-            role: "Betty",
-            instructions: `Office employee role: ${role}. ${instructions}`,
-            input,
-            signal: signal
-              ? AbortSignal.any([signal, AbortSignal.timeout(ecomodaTimeoutMs)])
-              : AbortSignal.timeout(ecomodaTimeoutMs),
-          }),
-        new Date(now()).toISOString(),
-      );
-      const nextWorkspace = { ...workspace, office: ran };
-      const changed = db
-        .prepare(
-          "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
-        )
-        .run(JSON.stringify(nextWorkspace), "owner", row.revision);
-      if (!changed.changes)
-        return res
-          .status(409)
-          .json({ error: "Workspace changed. Reload first." });
-      return res.json({ office: ran, revision: row.revision + 1 });
-    } catch (error) {
-      return res.status(502).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : "The office model run failed.",
-      });
-    }
-  });
-  const officeLink = z
-    .object({
-      missionId: z.string().trim().min(1).max(180),
-      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    })
-    .strict();
-  app.post("/api/office/link", auth, (req, res) => {
-    const parsed = officeLink.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid ORBIT mission link" });
-    const row = db
-      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
-      .get("owner") as { payload: string; revision: number };
-    if (row.revision !== parsed.data.revision)
-      return res
-        .status(409)
-        .json({ error: "Workspace changed. Reload first." });
-    const workspace = workspaceSchema.parse(JSON.parse(row.payload));
-    const mission = workspace.trading?.agentMissions.find(
-      (item) => item.id === parsed.data.missionId,
-    );
-    if (
-      !mission ||
-      (mission.status !== "owner_gate" && mission.status !== "accepted")
-    )
-      return res.status(423).json({
-        error:
-          "Only an audit-passed ORBIT mission at the owner gate can be linked.",
-      });
-    const office = officeWorkspaceSchema.parse(
-      workspace.office || emptyOfficeWorkspace(),
-    );
-    const linkedOffice = officeWorkspaceSchema.parse({
-      ...office,
-      orbit: {
-        missionId: mission.id,
-        status: "linked",
-        detail: `Linked to ORBIT mission ${mission.id}.`,
-        linkedAt: new Date(now()).toISOString(),
-      },
-    });
-    const nextWorkspace = { ...workspace, office: linkedOffice };
-    const changed = db
-      .prepare(
-        "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
-      )
-      .run(JSON.stringify(nextWorkspace), "owner", row.revision);
-    if (!changed.changes)
-      return res
-        .status(409)
-        .json({ error: "Workspace changed. Reload first." });
-    res.json({ office: linkedOffice, revision: row.revision + 1 });
-  });
   app.get("/api/billing/summary", auth, (_req, res) => {
     const subscriptions = db
       .prepare(
@@ -694,160 +448,6 @@ export function createApplication(config: Config) {
       annualRunRate: mrr * 12,
       subscriptions,
     });
-  });
-  app.get("/api/services/status", auth, (_req, res) => {
-    res.json(serviceWorker.summary());
-  });
-  const serviceRequest = z
-    .object({
-      id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/),
-      brief: z.string().trim().min(1).max(20000),
-    })
-    .strict();
-  app.post("/api/services/jobs", auth, (req, res) => {
-    if (!config.ecomodaInfer || !config.ecomodaStore)
-      return res
-        .status(503)
-        .json({ error: "Qwen service engine is not connected" });
-    const parsed = serviceRequest.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid service request" });
-    try {
-      res.status(202).json({
-        job: serviceWorker.enqueue(parsed.data.id, parsed.data.brief),
-      });
-    } catch {
-      res.status(409).json({ error: "Service request ID already used" });
-    }
-  });
-  app.get("/api/services/jobs/:id", auth, (req, res) => {
-    const id = req.params.id;
-    if (
-      typeof id !== "string" ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(id)
-    )
-      return res.status(400).json({ error: "Invalid service request ID" });
-    const job = serviceWorker.inspect(id);
-    if (!job)
-      return res.status(404).json({ error: "Service request not found" });
-    res.json({ job });
-  });
-  const projectId = /^[a-z0-9][a-z0-9_-]{0,79}$/;
-  app.get("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
-    if (!config.ecomodaMemory)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda project memory is not configured" });
-    const id = req.params.projectId;
-    if (typeof id !== "string" || !projectId.test(id))
-      return res.status(400).json({ error: "Invalid project ID" });
-    try {
-      const record = await config.ecomodaMemory.read(id);
-      res.json({ projectId: id, ...record });
-    } catch (error) {
-      next(error);
-    }
-  });
-  const memoryUpdate = z
-    .object({
-      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-      memory: z.unknown(),
-    })
-    .strict();
-  app.put("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
-    if (!config.ecomodaMemory)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda project memory is not configured" });
-    const id = req.params.projectId;
-    if (typeof id !== "string" || !projectId.test(id))
-      return res.status(400).json({ error: "Invalid project ID" });
-    const parsed = memoryUpdate.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid project memory update" });
-    try {
-      const record = await config.ecomodaMemory.update(
-        id,
-        parsed.data.memory as never,
-        parsed.data.revision,
-      );
-      res.json({ projectId: id, ...record });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (/revision conflict|update is busy/.test(message))
-        return res
-          .status(409)
-          .json({ error: "Project memory changed. Reload before saving." });
-      if (
-        /memory|preferences|verifiedState|nextActions|credential|secret/.test(
-          message,
-        )
-      )
-        return res.status(400).json({ error: "Project memory was rejected" });
-      next(error);
-    }
-  });
-  app.get("/api/ecomoda/tasks/:id", auth, async (req, res, next) => {
-    if (!config.ecomodaStore)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda persistence is not configured" });
-    const id = req.params.id;
-    if (
-      typeof id !== "string" ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id)
-    )
-      return res.status(400).json({ error: "Invalid task ID" });
-    try {
-      const task = await config.ecomodaStore.inspect(id);
-      if (!task.exists)
-        return res.status(404).json({ error: "Task not found" });
-      res.json({ task: { id, ...task } });
-    } catch (error) {
-      next(error);
-    }
-  });
-  const ecomodaTask = z
-    .object({
-      id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
-      task: z.string().trim().min(1).max(24000),
-    })
-    .strict();
-  app.post("/api/ecomoda/tasks", auth, async (req, res, next) => {
-    if (!config.ecomodaStore || !config.ecomodaInfer)
-      return res
-        .status(503)
-        .json({ error: "Ecomoda inference is not connected" });
-    const parsed = ecomodaTask.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: "Invalid Ecomoda task" });
-    try {
-      const signal = AbortSignal.timeout(ecomodaTimeoutMs);
-      const result = await runCycle({
-        ...parsed.data,
-        store: config.ecomodaStore,
-        infer: config.ecomodaInfer,
-        signal,
-      });
-      if (result.status === "skipped")
-        return res
-          .status(409)
-          .json({ error: "Task is active or already completed" });
-      res.status(201).json({
-        task: {
-          id: result.id,
-          status: result.status,
-          publishAllowed: false,
-          verifiedRevenue: null,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "TimeoutError")
-        return res
-          .status(504)
-          .json({ error: "Ecomoda cycle timed out and can be retried" });
-      next(error);
-    }
   });
   const update = z
     .object({
@@ -906,7 +506,6 @@ export function createApplication(config: Config) {
   return {
     app,
     close: async () => {
-      await serviceWorker.stop();
       db.close();
     },
   };
