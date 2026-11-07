@@ -8,12 +8,11 @@ Install Node.js 24 or newer, then open a terminal in this repository:
 
 ```sh
 npm ci --ignore-scripts
-npm run setup
 npm run build
-npm start
+npm run start:local
 ```
 
-`setup` asks for your owner password with hidden input and creates an ignored `.env` file containing its salted hash. There is no default password. Open **http://127.0.0.1:3001**, then sign in. The server binds only to your own computer by default.
+On the first local start, open **http://127.0.0.1:3002** and create your owner password in the browser. Setup binds to loopback only, checks the request origin and a per-run token, stores only a salted password hash in an ignored `.env` file, and refuses to replace existing configuration. After setup, ORBIT starts at **http://127.0.0.1:3001**. Later starts open the existing workspace. `start:local` keeps the server on loopback and disables Qwen/Ollama inference. It does not activate hosting, models, or paid services. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. The terminal-only `npm run setup` command remains available as an alternative.
 
 For frontend development, after setup use `npm run dev`. Open the Vite URL printed in the terminal; it proxies `/api` to the Express server. Both processes stop together.
 
