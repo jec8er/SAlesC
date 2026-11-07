@@ -115,10 +115,10 @@ test("rewards cannot be created without verified revenue evidence", () => {
   assert.equal(validated.success, true);
 });
 
-test("Ollama auto-selects the strongest installed Qwen model", async () => {
+test("Ollama auto-selects a Qwen model within the default 8B budget", async () => {
   assert.equal(
     chooseBestQwenModel(["llama3:70b", "qwen2.5:7b", "qwen3:32b", "qwq:32b"]),
-    "qwq:32b",
+    "qwen2.5:7b",
   );
   const originalFetch = globalThis.fetch;
   let chatModel = "";
@@ -147,8 +147,8 @@ test("Ollama auto-selects the strongest installed Qwen model", async () => {
       }),
       "local proposal",
     );
-    assert.equal(chatModel, "qwen3:32b");
-    assert.equal(adapter.status().model, "qwen3:32b");
+    assert.equal(chatModel, "qwen2.5:7b");
+    assert.equal(adapter.status().model, "qwen2.5:7b");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -229,4 +229,51 @@ test("rewards share one revenue budget and revoked rewards release it", () => {
     createVerifiedReward(office, "shared-revenue", 60, now).amount,
     60,
   );
+});
+
+test("Qwen discovery excludes oversized models unless a larger budget is explicit", () => {
+  assert.equal(chooseBestQwenModel(["qwen3.8:27b", "qwen3:8b"]), "qwen3:8b");
+  assert.equal(chooseBestQwenModel(["qwen3.8:27b"]), "");
+  assert.equal(chooseBestQwenModel(["qwen3.8:27b"], 32), "qwen3.8:27b");
+});
+
+test("Ollama discovery failure is visible and a later request can recover", async () => {
+  const originalFetch = globalThis.fetch;
+  let offline = true;
+  globalThis.fetch = async (input, init) => {
+    if (offline) throw Error("Ollama offline");
+    if (String(input).endsWith("/api/tags"))
+      return new Response(JSON.stringify({ models: [{ name: "qwen3:8b" }] }));
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.think, false);
+    assert.equal(body.options.num_predict, 512);
+    assert.ok(init?.signal);
+    return new Response(
+      JSON.stringify({ message: { content: "Recovered output" } }),
+    );
+  };
+  try {
+    const adapter = createOllamaAdapter();
+    await assert.rejects(
+      adapter.infer({
+        role: "research",
+        instructions: "Use evidence",
+        input: "brief",
+      }),
+      /offline/,
+    );
+    assert.equal(adapter.status().lastError, "Ollama offline");
+    offline = false;
+    assert.equal(
+      await adapter.infer({
+        role: "research",
+        instructions: "Use evidence",
+        input: "brief",
+      }),
+      "Recovered output",
+    );
+    assert.equal(adapter.status().status, "ready");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
