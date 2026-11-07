@@ -158,6 +158,20 @@ export const officeWorkspaceSchema = z
         message: "Office agents must have unique identifiers",
         path: ["agents"],
       });
+    for (const revenue of office.verifiedRevenue) {
+      const allocated = office.rewards
+        .filter(
+          (reward) =>
+            reward.revenueId === revenue.id && reward.status !== "revoked",
+        )
+        .reduce((total, reward) => total + reward.amount, 0);
+      if (allocated > revenue.amount)
+        context.addIssue({
+          code: "custom",
+          message: "Total rewards must be covered by verified revenue",
+          path: ["rewards"],
+        });
+    }
     const revenueIds = new Set(office.verifiedRevenue.map((item) => item.id));
     if (office.rewards.some((reward) => !revenueIds.has(reward.revenueId)))
       context.addIssue({
@@ -320,7 +334,16 @@ export function createVerifiedReward(
 ) {
   const revenue = office.verifiedRevenue.find((item) => item.id === revenueId);
   if (!revenue) throw Error("Verified revenue evidence is required");
-  if (!Number.isFinite(amount) || amount <= 0 || amount > revenue.amount)
+  const allocated = office.rewards
+    .filter(
+      (reward) => reward.revenueId === revenueId && reward.status !== "revoked",
+    )
+    .reduce((total, reward) => total + reward.amount, 0);
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    amount > revenue.amount - allocated
+  )
     throw Error("Reward must be positive and covered by verified revenue");
   return officeRewardSchema.parse({
     id: crypto.randomUUID(),
