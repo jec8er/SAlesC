@@ -62,8 +62,8 @@ const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
 );
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () =>
-    server.close(() => {
-      close();
+    server.close(async () => {
+      await close();
       process.exit(0);
     }),
   );
