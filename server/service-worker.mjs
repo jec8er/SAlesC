@@ -2,7 +2,13 @@ import { runCycle } from "../lib/ecomoda-core.mjs";
 
 // The queue produces private service artifacts. Model text cannot send messages,
 // publish, charge customers, or declare payment evidence.
-export function createServiceWorker({ db, infer, store, now = Date.now, timeoutMs = 120000 }) {
+export function createServiceWorker({
+  db,
+  infer,
+  store,
+  now = Date.now,
+  timeoutMs = 120000,
+}) {
   db.exec(`CREATE TABLE IF NOT EXISTS service_jobs (
     id TEXT PRIMARY KEY, brief TEXT NOT NULL, status TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0,
@@ -10,38 +16,58 @@ export function createServiceWorker({ db, infer, store, now = Date.now, timeoutM
   )`);
   // One process owns this SQLite application. Interrupted leases are retryable;
   // runCycle's durable checkpoints prevent repeating completed inference steps.
-  db.prepare("UPDATE service_jobs SET status='queued' WHERE status='running'").run();
+  db.prepare(
+    "UPDATE service_jobs SET status='queued' WHERE status='running'",
+  ).run();
   let active = false;
   let timer;
   let stopped = false;
   let controller;
   const enqueue = (id, brief) => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(id) ||
-        typeof brief !== "string" || !brief.trim() || brief.length > 20000)
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(id) ||
+      typeof brief !== "string" ||
+      !brief.trim() ||
+      brief.length > 20000
+    )
       throw Error("Invalid service request");
-    const existing = db.prepare("SELECT brief FROM service_jobs WHERE id=?").get(id);
-    if (existing && existing.brief !== brief) throw Error("Service request ID already used");
-    db.prepare("INSERT OR IGNORE INTO service_jobs(id,brief,status,updated_at) VALUES(?,?,'queued',?)")
-      .run(id, brief, now());
+    const existing = db
+      .prepare("SELECT brief FROM service_jobs WHERE id=?")
+      .get(id);
+    if (existing && existing.brief !== brief)
+      throw Error("Service request ID already used");
+    db.prepare(
+      "INSERT OR IGNORE INTO service_jobs(id,brief,status,updated_at) VALUES(?,?,'queued',?)",
+    ).run(id, brief, now());
     return inspect(id);
   };
-  const inspect = (id) => db.prepare(
-    "SELECT id,status,attempts,updated_at AS updatedAt,result FROM service_jobs WHERE id=?",
-  ).get(id);
+  const inspect = (id) =>
+    db
+      .prepare(
+        "SELECT id,status,attempts,updated_at AS updatedAt,result FROM service_jobs WHERE id=?",
+      )
+      .get(id);
   const tick = async () => {
     if (active || stopped || typeof infer !== "function" || !store)
       return { status: "idle" };
-    const job = db.prepare(
-      "SELECT * FROM service_jobs WHERE status='queued' AND next_attempt<=? ORDER BY updated_at,id LIMIT 1",
-    ).get(now());
+    const job = db
+      .prepare(
+        "SELECT * FROM service_jobs WHERE status='queued' AND next_attempt<=? ORDER BY updated_at,id LIMIT 1",
+      )
+      .get(now());
     if (!job) return { status: "idle" };
-    const claimed = db.prepare(
-      "UPDATE service_jobs SET status='running',attempts=attempts+1,updated_at=? WHERE id=? AND status='queued'",
-    ).run(now(), job.id);
+    const claimed = db
+      .prepare(
+        "UPDATE service_jobs SET status='running',attempts=attempts+1,updated_at=? WHERE id=? AND status='queued'",
+      )
+      .run(now(), job.id);
     if (!claimed.changes) return { status: "idle" };
     active = true;
     controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]);
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(timeoutMs),
+    ]);
     try {
       const taskId = `service:${job.id}`;
       const result = await runCycle({
@@ -55,21 +81,39 @@ export function createServiceWorker({ db, infer, store, now = Date.now, timeoutM
             "Identify missing evidence and limitations explicitly.",
           ],
         }),
-        infer, store, signal,
+        infer,
+        store,
+        signal,
       });
       // A crash after runCycle.finish but before this write is recoverable.
-      const recovered = result.status === "skipped" ? await store.inspect(taskId) : null;
+      const recovered =
+        result.status === "skipped" ? await store.inspect(taskId) : null;
       const outcome = recovered ? { status: recovered.resultStatus } : result;
-      const status = outcome.status === "awaiting_artifact_validation" ||
-        outcome.status === "revision_required" ? outcome.status : "blocked";
-      db.prepare("UPDATE service_jobs SET status=?,result=?,updated_at=? WHERE id=?")
-        .run(status, JSON.stringify({ taskId, status, publishAllowed: false }), now(), job.id);
+      const status =
+        outcome.status === "awaiting_artifact_validation" ||
+        outcome.status === "revision_required"
+          ? outcome.status
+          : "blocked";
+      db.prepare(
+        "UPDATE service_jobs SET status=?,result=?,updated_at=? WHERE id=?",
+      ).run(
+        status,
+        JSON.stringify({ taskId, status, publishAllowed: false }),
+        now(),
+        job.id,
+      );
       return { id: job.id, status };
     } catch {
       const attempts = job.attempts + 1;
       const status = stopped || attempts >= 3 ? "blocked" : "queued";
-      db.prepare("UPDATE service_jobs SET status=?,next_attempt=?,updated_at=? WHERE id=?")
-        .run(status, now() + Math.min(300000, 1000 * 2 ** attempts), now(), job.id);
+      db.prepare(
+        "UPDATE service_jobs SET status=?,next_attempt=?,updated_at=? WHERE id=?",
+      ).run(
+        status,
+        now() + Math.min(300000, 1000 * 2 ** attempts),
+        now(),
+        job.id,
+      );
       return { id: job.id, status };
     } finally {
       active = false;
@@ -77,7 +121,9 @@ export function createServiceWorker({ db, infer, store, now = Date.now, timeoutM
     }
   };
   return {
-    enqueue, inspect, tick,
+    enqueue,
+    inspect,
+    tick,
     summary() {
       return {
         targetUsd: 2000000,
@@ -85,12 +131,18 @@ export function createServiceWorker({ db, infer, store, now = Date.now, timeoutM
         engine: "qwen",
         automaticProcessing: Boolean(infer && store && timer),
         externalSalesConnected: false,
-        jobs: db.prepare("SELECT status,COUNT(*) AS count FROM service_jobs GROUP BY status").all(),
+        jobs: db
+          .prepare(
+            "SELECT status,COUNT(*) AS count FROM service_jobs GROUP BY status",
+          )
+          .all(),
       };
     },
     start() {
       if (timer || stopped) return;
-      timer = setInterval(() => { void tick().catch(() => {}); }, 1000);
+      timer = setInterval(() => {
+        void tick().catch(() => {});
+      }, 1000);
       timer.unref?.();
       void tick().catch(() => {});
     },
