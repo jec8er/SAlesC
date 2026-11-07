@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 function setupPage(token) {
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up ORBIT</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#0b1420;color:#e5eef7;font:16px system-ui;min-height:100vh;display:grid;place-items:center;padding:24px}main{max-width:480px;width:100%;padding:36px;border:1px solid #294052;border-radius:20px;background:#111f2e}small{color:#70e6c5;letter-spacing:.15em}h1{font-size:36px}p{color:#a9bdcf;line-height:1.65}label{display:block;margin-top:20px}input,button{width:100%;padding:14px;border-radius:9px;margin-top:8px;font:inherit}input{background:#0a1622;color:white;border:1px solid #38516a}button{margin-top:24px;border:0;background:#73e7c5;color:#09201b;font-weight:700;cursor:pointer}button:disabled{opacity:.6}#status{min-height:40px}a{color:#73e7c5}</style>
-<main><small>ORBIT / LOCAL SETUP</small><h1>Your private workspace.</h1><p>Create your owner password. Only its salted hash is saved on this computer. AI inference is disabled. No paid hosting is activated.</p>
+<main><small>ORBIT / LOCAL SETUP</small><h1>Your private workspace.</h1><p>Create your owner password. Only its salted hash is saved on this computer. Local inference uses Ollama on this computer when Ollama and a compatible Qwen model are installed. No cloud model is used by this launcher. No paid hosting is activated.</p>
 <form><input type="hidden" name="csrf" value="${token}"><label>Owner password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="512" required></label><label>Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="12" maxlength="512" required></label><button>Create access and start ORBIT</button></form><p id="status" role="status" aria-live="polite"></p></main>
 <script nonce="${token}">document.querySelector('form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),status=document.querySelector('#status'),values=Object.fromEntries(new FormData(form));if(values.password!==values.confirm){status.textContent='Passwords do not match.';return;}button.disabled=true;try{const response=await fetch('/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});const data=await response.json();if(!response.ok)throw Error(data.error);form.remove();status.textContent='Access created. ORBIT is starting; wait a few seconds before opening it.';const link=document.createElement('a');link.href='http://127.0.0.1:3001';link.textContent='Open ORBIT';status.after(link);}catch(error){status.textContent=error.message;button.disabled=false;}});</script></html>`;
 }
@@ -146,8 +146,8 @@ export function startLocal(
           NODE_ENV: "development",
           PUBLIC_ORIGIN: "",
           ORBIT_LOCAL_PASSWORDLESS: "true",
-          OLLAMA_AUTO_DISCOVER: "false",
-          OLLAMA_MODEL: "",
+          OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+          OLLAMA_AUTO_DISCOVER: "true",
           QWEN_LOCAL_ENDPOINT: "",
           QWEN_MODEL: "",
           QWEN_API_KEY: "",
