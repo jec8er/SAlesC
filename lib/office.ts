@@ -71,6 +71,27 @@ export const officeHandoffSchema = z
   })
   .strict();
 
+export const officeAgentRunSchema = z
+  .object({
+    agent: z.enum(officeAgentIds),
+    status: z.enum(["completed", "blocked", "failed"]),
+    output: z.string().trim().min(1).max(4000),
+    createdAt: timestamp,
+  })
+  .strict();
+
+export const officeRunSchema = z
+  .object({
+    id: text,
+    stage: officeStageSchema,
+    brief: z.string().trim().min(1).max(1200),
+    status: z.enum(["completed", "blocked", "failed"]),
+    agents: z.array(officeAgentRunSchema).min(1).max(18),
+    startedAt: timestamp,
+    finishedAt: timestamp,
+  })
+  .strict();
+
 export const verifiedRevenueSchema = z
   .object({
     id: text,
@@ -143,6 +164,7 @@ export const officeWorkspaceSchema = z
     agents: z.array(officeAgentSchema).length(18),
     connectors: z.array(officeConnectorSchema).length(5),
     handoffs: z.array(officeHandoffSchema).max(5000),
+    runs: z.array(officeRunSchema).max(1000).default([]),
     verifiedRevenue: z.array(verifiedRevenueSchema).max(1000),
     rewards: z.array(officeRewardSchema).max(1000),
     qwen: qwenStatusSchema,
@@ -238,6 +260,7 @@ export const emptyOfficeWorkspace = (): OfficeWorkspace => ({
     },
   ],
   handoffs: [],
+  runs: [],
   verifiedRevenue: [],
   rewards: [],
   qwen: {
@@ -255,6 +278,101 @@ const stageConnector: Partial<Record<OfficeStage, OfficeConnector["id"]>> = {
 };
 
 const orbitRequiredFrom: OfficeStage = "creation";
+
+const stageAgents: Record<OfficeStage, readonly OfficeAgentId[]> = {
+  intake: ["research", "audience"],
+  research: ["research", "audience", "trend", "factchecker"],
+  creation: ["script", "creative", "editor", "brand", "localization"],
+  review: ["factchecker", "legal", "producer", "auditor"],
+  distribution: ["producer", "publisher"],
+  analysis: ["community", "analytics", "growth"],
+  revenue_review: ["monetization", "auditor"],
+};
+
+export type OfficeInference = (request: {
+  role: string;
+  instructions: string;
+  input: string;
+  signal?: AbortSignal;
+}) => Promise<string>;
+
+export async function runOfficeStage(
+  office: OfficeWorkspace,
+  brief: string,
+  infer: OfficeInference,
+  now: string,
+): Promise<OfficeWorkspace> {
+  const parsedBrief = z.string().trim().min(1).max(1200).parse(brief);
+  const agents = stageAgents[office.currentStage];
+  const next = structuredClone(office);
+  const outputs: z.infer<typeof officeAgentRunSchema>[] = [];
+  for (const agentId of agents) {
+    const agent = next.agents.find((item) => item.id === agentId);
+    if (!agent) throw Error(`Office agent ${agentId} is missing`);
+    agent.state = "working";
+    try {
+      const output = await infer({
+        role: agentId,
+        instructions: [
+          `You are the ${agent.name} employee in the ORBIT content office.`,
+          `Your specialty is ${agent.specialty}.`,
+          `Work only from the supplied brief and prior office evidence.`,
+          "Return a concise, actionable handoff for the next employee.",
+          "Do not claim a publication, metric, revenue, credential, or external action unless it is explicitly present in the evidence.",
+        ].join(" "),
+        input: JSON.stringify({
+          stage: office.currentStage,
+          brief: parsedBrief,
+          priorHandoffs: next.handoffs.slice(-10),
+        }),
+      });
+      agent.state = "waiting";
+      outputs.push(
+        officeAgentRunSchema.parse({
+          agent: agentId,
+          status: "completed",
+          output,
+          createdAt: now,
+        }),
+      );
+    } catch (error) {
+      agent.state = "blocked";
+      const message =
+        error instanceof Error ? error.message.slice(0, 400) : "Agent failed";
+      outputs.push(
+        officeAgentRunSchema.parse({
+          agent: agentId,
+          status: "failed",
+          output: message,
+          createdAt: now,
+        }),
+      );
+      throw Error(`${agent.name} is blocked: ${message}`);
+    }
+  }
+  const run = officeRunSchema.parse({
+    id: crypto.randomUUID(),
+    stage: office.currentStage,
+    brief: parsedBrief,
+    status: "completed",
+    agents: outputs,
+    startedAt: now,
+    finishedAt: now,
+  });
+  next.runs.push(run);
+  next.handoffs.push({
+    id: crypto.randomUUID(),
+    sequence: next.handoffs.length + 1,
+    from: agents[0],
+    to: agents[agents.length - 1],
+    stage: office.currentStage,
+    status: "completed",
+    note: `Real model run completed for ${agents.length} office employees.`,
+    evidenceRefs: [run.id],
+    createdAt: now,
+  });
+  return officeWorkspaceSchema.parse(next);
+}
 
 export function requiredConnector(stage: OfficeStage) {
   return stageConnector[stage] || null;

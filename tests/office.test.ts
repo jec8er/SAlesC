@@ -5,6 +5,7 @@ import {
   createVerifiedReward,
   emptyOfficeWorkspace,
   officeWorkspaceSchema,
+  runOfficeStage,
 } from "../lib/office.ts";
 import { createOllamaAdapter } from "../lib/ollama-adapter.ts";
 import { chooseBestQwenModel } from "../lib/ollama-adapter.ts";
@@ -56,6 +57,30 @@ test("content creation is blocked until an audited ORBIT mission is linked", () 
   result = advanceOfficeStage(office, "2026-11-06T00:00:00.000Z");
   assert.equal(result.blocked, null);
   assert.equal(result.office.currentStage, "creation");
+});
+
+test("the office runs assigned employees through the real inference contract", async () => {
+  const office = emptyOfficeWorkspace();
+  const calls: string[] = [];
+  const ran = await runOfficeStage(
+    office,
+    "Build a short-form research brief from the supplied sources.",
+    async ({ role, input }) => {
+      calls.push(`${role}:${input.includes("supplied")}`);
+      return `handoff from ${role}`;
+    },
+    "2026-11-06T00:00:00.000Z",
+  );
+  assert.deepEqual(calls, ["research:true", "audience:true"]);
+  assert.equal(ran.runs.length, 1);
+  assert.equal(ran.runs[0].status, "completed");
+  assert.equal(ran.runs[0].agents.length, 2);
+  assert.equal(ran.handoffs.at(-1)?.evidenceRefs.length, 1);
+  assert.ok(
+    ran.agents
+      .filter((agent) => ["research", "audience"].includes(agent.id))
+      .every((agent) => agent.state === "waiting"),
+  );
 });
 
 test("rewards cannot be created without verified revenue evidence", () => {
@@ -151,6 +176,7 @@ test("Ollama uses an explicit model override and the local chat contract", async
       baseUrl: "http://ollama.test",
       model: "qwen3:8b",
     });
+
     assert.equal(adapter.status().status, "ready");
     assert.equal(
       await adapter.infer({

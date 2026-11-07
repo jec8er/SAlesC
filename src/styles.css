@@ -526,6 +526,22 @@ textarea:focus-visible {
 .glass-panel {
   padding: 24px;
 }
+.office-brief {
+  width: 100%;
+  min-height: 110px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  resize: vertical;
+  color: var(--text);
+  background: rgba(5, 7, 13, 0.62);
+  font: inherit;
+}
+.office-brief:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .panel-head {
   display: flex;
   align-items: flex-start;

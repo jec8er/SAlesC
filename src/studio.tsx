@@ -225,6 +225,7 @@ export default function Studio({
   const [demo, setDemo] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [officeBrief, setOfficeBrief] = useState("");
   const [composer, setComposer] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [latestBacktestId, setLatestBacktestId] = useState("");
@@ -391,6 +392,43 @@ export default function Studio({
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Office stage is blocked",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runOffice() {
+    if (!officeBrief.trim()) {
+      setError("Give the office a brief before starting a real model run.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/office/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ revision, brief: officeBrief }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        office?: OfficeWorkspace;
+        revision?: number;
+      };
+      if (response.status === 401)
+        window.dispatchEvent(new Event("session-expired"));
+      if (!response.ok) throw Error(data.error || "Office model run failed");
+      if (data.office && data.revision !== undefined) {
+        setWorkspace((current) =>
+          workspaceSchema.parse({ ...current, office: data.office }),
+        );
+        setRevision(data.revision);
+        setToast("Office employees completed a real model run");
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Office model run failed",
       );
     } finally {
       setBusy(false);
@@ -938,9 +976,12 @@ export default function Studio({
               <OfficePanel
                 office={office}
                 mission={missionForSelected}
+                brief={officeBrief}
                 busy={busy}
                 onAdvance={() => void advanceOffice()}
                 onLink={() => void linkOfficeToMission()}
+                onBriefChange={setOfficeBrief}
+                onRun={() => void runOffice()}
               />
             )}
             {view === "command" && (
@@ -2306,15 +2347,21 @@ function PageTitle({
 function OfficePanel({
   office,
   mission,
+  brief,
   busy,
   onAdvance,
   onLink,
+  onBriefChange,
+  onRun,
 }: {
   office: OfficeWorkspace;
   mission: AgentMission | undefined;
+  brief: string;
   busy: boolean;
   onAdvance: () => void;
   onLink: () => void;
+  onBriefChange: (value: string) => void;
+  onRun: () => void;
 }) {
   const stages = officeStageSchema.options;
   const currentIndex = stages.indexOf(office.currentStage);
@@ -2393,6 +2440,43 @@ function OfficePanel({
         </div>
       </section>
       <section className="dashboard-grid">
+        <section className="glass-panel">
+          <div className="panel-head">
+            <div>
+              <p className="signal-label">EMPLOYEE FLOOR</p>
+              <h2>Give the current team a real brief</h2>
+            </div>
+            <span className="status-chip live">
+              {office.runs.length} model runs
+            </span>
+          </div>
+          <p className="panel-copy">
+            Run the employees assigned to <strong>{office.currentStage}</strong>
+            . Their responses are saved as handoffs; no external action is
+            claimed unless its connector provides evidence.
+          </p>
+          <textarea
+            className="office-brief"
+            value={brief}
+            maxLength={1200}
+            onChange={(event) => onBriefChange(event.target.value)}
+            placeholder="Describe the content job, supplied evidence, audience and constraints."
+            aria-label="Office brief"
+          />
+          <div className="inline-actions">
+            <small className="muted">
+              Qwen/Ollama must be ready. This calls the configured model.
+            </small>
+            <button
+              className="neon-button"
+              type="button"
+              disabled={busy || office.qwen.status !== "ready"}
+              onClick={onRun}
+            >
+              <Play size={15} /> Run office
+            </button>
+          </div>
+        </section>
         <section className="glass-panel">
           <div className="panel-head">
             <div>

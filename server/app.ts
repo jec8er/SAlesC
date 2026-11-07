@@ -23,6 +23,7 @@ import {
   advanceOfficeStage,
   emptyOfficeWorkspace,
   officeWorkspaceSchema,
+  runOfficeStage,
 } from "../lib/office.ts";
 import type { QwenAdapter } from "../lib/qwen-adapter.ts";
 import {
@@ -515,6 +516,66 @@ export function createApplication(config: Config) {
       office: advanced.office,
       revision: row.revision + 1,
     });
+  });
+  const officeRun = z
+    .object({
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      brief: z.string().trim().min(1).max(1200),
+    })
+    .strict();
+  app.post("/api/office/run", auth, async (req, res) => {
+    const parsed = officeRun.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid office brief" });
+    const adapter = config.qwenAdapter;
+    if (!adapter || adapter.status().status !== "ready")
+      return res.status(423).json({
+        error:
+          "The office is blocked until a real Qwen/Ollama adapter is ready.",
+      });
+    const row = db
+      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
+      .get("owner") as { payload: string; revision: number };
+    if (row.revision !== parsed.data.revision)
+      return res
+        .status(409)
+        .json({ error: "Workspace changed. Reload first." });
+    const workspace = workspaceSchema.parse(JSON.parse(row.payload));
+    const office = officeWorkspaceSchema.parse(
+      workspace.office || emptyOfficeWorkspace(),
+    );
+    try {
+      const ran = await runOfficeStage(
+        office,
+        parsed.data.brief,
+        ({ role, instructions, input, signal }) =>
+          adapter.infer({
+            role: "Betty",
+            instructions: `Office employee role: ${role}. ${instructions}`,
+            input,
+            signal,
+          }),
+        new Date(now()).toISOString(),
+      );
+      const nextWorkspace = { ...workspace, office: ran };
+      const changed = db
+        .prepare(
+          "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
+        )
+        .run(JSON.stringify(nextWorkspace), "owner", row.revision);
+      if (!changed.changes)
+        return res
+          .status(409)
+          .json({ error: "Workspace changed. Reload first." });
+      return res.json({ office: ran, revision: row.revision + 1 });
+    } catch (error) {
+      return res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "The office model run failed.",
+      });
+    }
   });
   const officeLink = z
     .object({

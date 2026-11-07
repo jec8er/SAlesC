@@ -96,17 +96,20 @@ export function createOllamaAdapter(config: OllamaConfig = {}): OllamaAdapter {
         throw Error(lastError);
       }
       const data = (await response.json()) as {
-        message?: { content?: unknown };
+        message?: { content?: unknown; thinking?: unknown };
       };
-      if (
-        typeof data.message?.content !== "string" ||
-        !data.message.content.trim()
-      ) {
+      const content =
+        typeof data.message?.content === "string" && data.message.content.trim()
+          ? data.message.content
+          : typeof data.message?.thinking === "string"
+            ? data.message.thinking
+            : "";
+      if (!content || !content.trim()) {
         lastError = "Ollama returned no text";
         throw Error(lastError);
       }
       lastError = "";
-      return data.message.content;
+      return content;
     },
   };
 }
