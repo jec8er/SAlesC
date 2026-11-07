@@ -1,3 +1,4 @@
+import AgentWorld from "./agent-world";
 import { useEffect, useMemo, useState } from "react";
 import BusinessFactory from "./business-factory";
 import {
@@ -2368,6 +2369,7 @@ function OfficePanel({
   const currentIndex = stages.indexOf(office.currentStage);
   return (
     <div className="view-stack">
+      <AgentWorld office={office} />
       <section className="command-hero">
         <div>
           <p className="signal-label">CONTENT OPERATIONS / 18 AGENTS</p>
