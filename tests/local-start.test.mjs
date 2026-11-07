@@ -5,10 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { scryptSync } from "node:crypto";
 import { EventEmitter } from "node:events";
-import {
-  createSetupServer,
-  superviseChild,
-} from "../scripts/local-start.mjs";
+import { createSetupServer, superviseChild } from "../scripts/local-start.mjs";
 
 async function fixture(t) {
   const prefix = join(tmpdir(), "orbit-setup-");
