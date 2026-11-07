@@ -9,19 +9,16 @@ if not exist node_modules (
   call npm ci --ignore-scripts --no-audit --no-fund
   if errorlevel 1 goto :failed
 )
-if not exist .env (
-  call npm run setup
-  if errorlevel 1 goto :failed
-)
 if not exist dist\index.html (
   call npm run build
   if errorlevel 1 goto :failed
 )
 echo.
-echo Open http://127.0.0.1:3001 in your browser after the server starts.
+echo First start: create your password at http://127.0.0.1:3002.
+echo After setup, open http://127.0.0.1:3001.
 echo Keep this window open while using the application. Ctrl+C stops it.
 echo.
-call npm start
+call npm run start:local
 if errorlevel 1 goto :failed
 exit /b 0
 :missingnode
