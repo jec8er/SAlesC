@@ -164,3 +164,43 @@ test("Ollama uses an explicit model override and the local chat contract", async
     globalThis.fetch = originalFetch;
   }
 });
+
+test("rewards share one revenue budget and revoked rewards release it", () => {
+  const office = emptyOfficeWorkspace();
+  const now = "2026-11-06T00:00:00.000Z";
+  office.verifiedRevenue.push({
+    id: "shared-revenue",
+    platform: "youtube",
+    amount: 100,
+    currency: "USD",
+    source: "platform_payout",
+    externalReference: "payout-shared",
+    verifiedAt: now,
+    verifiedBy: "owner",
+  });
+  const first = createVerifiedReward(office, "shared-revenue", 60, now);
+  office.rewards.push(first);
+  assert.throws(
+    () => createVerifiedReward(office, "shared-revenue", 50, now),
+    /covered by verified revenue/,
+  );
+  const remaining = createVerifiedReward(office, "shared-revenue", 40, now);
+  office.rewards.push({ ...remaining, status: "paid" });
+  assert.equal(officeWorkspaceSchema.safeParse(office).success, true);
+  assert.throws(
+    () => createVerifiedReward(office, "shared-revenue", 1, now),
+    /covered by verified revenue/,
+  );
+  assert.equal(
+    officeWorkspaceSchema.safeParse({
+      ...office,
+      rewards: [...office.rewards, { ...remaining, id: "overflow", amount: 1 }],
+    }).success,
+    false,
+  );
+  office.rewards[0] = { ...first, status: "revoked" };
+  assert.equal(
+    createVerifiedReward(office, "shared-revenue", 60, now).amount,
+    60,
+  );
+});
