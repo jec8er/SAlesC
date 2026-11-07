@@ -682,11 +682,9 @@ export function createApplication(config: Config) {
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid service request" });
     try {
-      res
-        .status(202)
-        .json({
-          job: serviceWorker.enqueue(parsed.data.id, parsed.data.brief),
-        });
+      res.status(202).json({
+        job: serviceWorker.enqueue(parsed.data.id, parsed.data.brief),
+      });
     } catch {
       res.status(409).json({ error: "Service request ID already used" });
     }
