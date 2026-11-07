@@ -12,7 +12,6 @@ import {
   Download,
   Eye,
   FileCheck2,
-  FlaskConical,
   Gauge,
   ListChecks,
   LockKeyhole,
@@ -61,18 +60,17 @@ import {
   type OfficeWorkspace,
 } from "../lib/office";
 
-const nav = [
-  ["command", "Command center", Orbit],
-  ["office", "Content office", Bot],
-  ["strategies", "Strategies", BrainCircuit],
-  ["backtests", "Backtesting", BarChart3],
-  ["agents", "Agent network", Bot],
-  ["risk", "Risk control", ShieldCheck],
-  ["ledger", "Paper ledger", WalletCards],
-  ["trust", "Trust center", Scale],
-  ["plans", "Plans", CircleDollarSign],
-] as const;
-type View = (typeof nav)[number][0];
+const nav = [["office", "Content office", Bot]] as const;
+type View =
+  | "command"
+  | "office"
+  | "strategies"
+  | "backtests"
+  | "agents"
+  | "risk"
+  | "ledger"
+  | "trust"
+  | "plans";
 const agents: ReadonlyArray<{
   id: AgentEvent["agent"];
   name: string;
@@ -220,7 +218,7 @@ export default function Studio({
 }) {
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [revision, setRevision] = useState(0);
-  const [view, setView] = useState<View>("command");
+  const [view, setView] = useState<View>("office");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [demo, setDemo] = useState(false);
@@ -400,7 +398,7 @@ export default function Studio({
 
   async function linkOfficeToMission() {
     if (!missionForSelected) {
-      setView("command");
+      setView("office");
       setError("Create and audit an ORBIT mission before linking the office.");
       return;
     }
@@ -861,8 +859,8 @@ export default function Studio({
       <aside className="orbit-sidebar">
         <button
           className="orbit-brand"
-          onClick={() => setView("command")}
-          aria-label="Open ORBIT command center"
+          onClick={() => setView("office")}
+          aria-label="Open ORBIT content office"
         >
           <span className="orbit-logo">
             <Atom size={24} />
@@ -871,7 +869,7 @@ export default function Studio({
             ORBIT<small>AGENTIC MARKET LAB</small>
           </span>
         </button>
-        <p className="nav-kicker">OPERATIONS</p>
+        <p className="nav-kicker">CONTENT OPERATIONS</p>
         <nav aria-label="ORBIT operations">
           {nav.map(([id, label, Icon]) => (
             <button
@@ -882,15 +880,14 @@ export default function Studio({
             >
               <Icon size={17} />
               {label}
-              {id === "command" && <i />}
             </button>
           ))}
         </nav>
         <div className="mode-lock">
           <LockKeyhole size={16} />
           <div>
-            <strong>PAPER MODE</strong>
-            <small>Live execution locked</small>
+            <strong>OFFICE MODE</strong>
+            <small>External actions gated</small>
           </div>
         </div>
         <div className="orbit-user">
@@ -912,29 +909,8 @@ export default function Studio({
           </div>
           <div className="header-actions">
             <span>{busy ? "SAVING" : loaded ? "SYNCED" : "CONNECTING"}</span>
-            <button
-              onClick={() => {
-                if (demo) {
-                  setDemo(false);
-                  load();
-                } else {
-                  setDemo(true);
-                  setWorkspace(demoWorkspace());
-                  setSelectedId("demo-btc");
-                  setLoaded(true);
-                }
-              }}
-            >
-              {demo ? "Exit demo" : "Load demo"}
-            </button>
           </div>
         </header>
-        {demo && (
-          <div className="system-banner">
-            <FlaskConical size={15} /> Demo data · modeled outcomes · no live
-            prices
-          </div>
-        )}
         {error && (
           <div className="error-banner">
             <TriangleAlert size={16} />
@@ -1020,73 +996,6 @@ export default function Studio({
                         </span>
                       );
                     })}
-                  </div>
-                </section>
-                <section className="glass-panel orbit-office-floor">
-                  <div className="panel-head">
-                    <div>
-                      <p className="signal-label">ORBIT OFFICE / LIVE FLOOR</p>
-                      <h2>One room. Two operating lanes.</h2>
-                    </div>
-                    <span className="status-chip live">
-                      {office.orbit?.status === "linked"
-                        ? "MISSION LINKED"
-                        : "PAPER CONTROL"}
-                    </span>
-                  </div>
-                  <p className="panel-copy">
-                    The market team and the content team work from the same
-                    evidence trail. ORBIT agents authorize the room; the 18
-                    specialist desks stay blocked when connectors or evidence
-                    are missing.
-                  </p>
-                  <div className="office-floor-grid">
-                    <div className="office-lane">
-                      <div className="office-lane-head">
-                        <span className="signal-label">MARKET LANE</span>
-                        <small>6 core agents</small>
-                      </div>
-                      <div className="office-desk-grid">
-                        {agents.map((agent) => {
-                          const Icon = agent.icon;
-                          const last = agentStates.get(agent.id);
-                          return (
-                            <div className="office-desk" key={agent.id}>
-                              <Icon size={16} />
-                              <strong>{agent.name}</strong>
-                              <small>{last?.status || "idle"}</small>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="office-lane content-lane">
-                      <div className="office-lane-head">
-                        <span className="signal-label">CONTENT LANE</span>
-                        <small>18 specialist agents</small>
-                      </div>
-                      <div className="content-office-summary">
-                        <strong>
-                          {office.currentStage.replaceAll("_", " ")}
-                        </strong>
-                        <span>
-                          {office.handoffs.length} handoffs ·{" "}
-                          {
-                            office.connectors.filter(
-                              (connector) => connector.status === "ready",
-                            ).length
-                          }{" "}
-                          connectors ready
-                        </span>
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={() => setView("office")}
-                        >
-                          Open content office <ChevronRight size={15} />
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </section>
                 <section className="metric-strip">
