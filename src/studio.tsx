@@ -222,7 +222,7 @@ export default function Studio({
 }: {
   displayName: string;
   csrf: string;
-  onLogout: () => void;
+  onLogout?: () => void;
 }) {
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [revision, setRevision] = useState(0);
@@ -958,9 +958,11 @@ export default function Studio({
             <strong>{displayName.split("@")[0]}</strong>
             <small>Owner</small>
           </div>
-          <button onClick={onLogout} aria-label="Sign out">
-            <LogOut size={15} />
-          </button>
+          {onLogout && (
+            <button onClick={onLogout} aria-label="Sign out">
+              <LogOut size={15} />
+            </button>
+          )}
         </div>
       </aside>
       <main className="orbit-main" id="main-content" tabIndex={-1}>

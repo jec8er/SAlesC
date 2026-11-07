@@ -3,7 +3,7 @@ import { ShieldCheck, ArrowRight, Check, Orbit } from "lucide-react";
 
 const Studio = lazy(() => import("./studio"));
 
-type Session = { name: string; csrf: string };
+type Session = { name: string; csrf: string; passwordless?: boolean };
 
 const publicPlans = [
   {
@@ -168,7 +168,14 @@ export default function App() {
       .finally(() => setReady(true));
     const expired = () => {
       setAuth(null);
-      setError("Your session expired. Sign in again.");
+      setReady(false);
+      fetch("/api/session")
+        .then(async (r) => {
+          if (r.ok) setAuth((await r.json()) as Session);
+          else setError("Your session expired. Sign in again.");
+        })
+        .catch(() => setError("Unable to reconnect. Reload the page."))
+        .finally(() => setReady(true));
     };
     window.addEventListener("session-expired", expired);
     return () => window.removeEventListener("session-expired", expired);
@@ -211,7 +218,11 @@ export default function App() {
       <Suspense
         fallback={<div className="app-loading">Initializing ORBIT…</div>}
       >
-        <Studio displayName={auth.name} csrf={auth.csrf} onLogout={logout} />
+        <Studio
+          displayName={auth.name}
+          csrf={auth.csrf}
+          onLogout={auth.passwordless ? undefined : logout}
+        />
         {error && (
           <p role="alert" className="auth-error">
             {error}

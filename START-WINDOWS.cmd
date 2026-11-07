@@ -14,8 +14,7 @@ if not exist dist\index.html (
   if errorlevel 1 goto :failed
 )
 echo.
-echo First start: create your password at http://127.0.0.1:3002.
-echo After setup, open http://127.0.0.1:3001.
+echo Open http://127.0.0.1:3001. No password is required locally.
 echo Keep this window open while using the application. Ctrl+C stops it.
 echo.
 call npm run start:local

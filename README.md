@@ -12,13 +12,15 @@ npm run build
 npm run start:local
 ```
 
-On the first local start, open **http://127.0.0.1:3002** and create your owner password in the browser. Setup binds to loopback only, checks the request origin and a per-run token, stores only a salted password hash in an ignored `.env` file, and refuses to replace existing configuration. After setup, ORBIT starts at **http://127.0.0.1:3001**. Later starts open the existing workspace. `start:local` keeps the server on loopback and disables Qwen/Ollama inference. It does not activate hosting, models, or paid services. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. The terminal-only `npm run setup` command remains available as an alternative.
+Open **http://127.0.0.1:3001**. Local startup opens your workspace directly, with no password or setup page. It creates no password and preserves existing configuration and saved data. `start:local` binds to loopback only and disables Qwen/Ollama inference. Local browser sessions and CSRF checks remain enabled; foreign origins and non-loopback hosts are rejected. On Windows, `START-WINDOWS.cmd` performs the same build and startup flow. No hosting, models or paid services are activated.
+
+Password-free access is available only through the local launcher. Public/production deployments continue to require owner authentication. The optional `npm run setup` command configures password-based access for that separate mode.
 
 For frontend development, after setup use `npm run dev`. Open the Vite URL printed in the terminal; it proxies `/api` to the Express server. Both processes stop together.
 
 ## Features
 
-- Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
+- Direct local access without a password; owner-password sign-in for hosted mode, with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
 - An evidence-bound content office with 18 specialist agents for TikTok and YouTube, linked to audit-passed ORBIT missions before creation, review or distribution.
