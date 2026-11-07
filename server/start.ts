@@ -30,7 +30,8 @@ const billing = stripeValues.every(Boolean)
 const qwenAdapter =
   !process.env.QWEN_LOCAL_ENDPOINT &&
   !process.env.QWEN_MODEL &&
-  process.env.OLLAMA_AUTO_DISCOVER !== "false"
+  (Boolean(process.env.OLLAMA_MODEL) ||
+    process.env.OLLAMA_AUTO_DISCOVER !== "false")
     ? createOllamaAdapter({
         baseUrl: process.env.OLLAMA_BASE_URL,
         model: process.env.OLLAMA_MODEL,
