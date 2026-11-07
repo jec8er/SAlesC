@@ -2468,12 +2468,13 @@ function OfficePanel({
           />
           <div className="inline-actions">
             <small className="muted">
-              Qwen/Ollama must be ready. This calls the configured model.
+              The first run discovers the configured Qwen model. Failed
+              connections can be retried.
             </small>
             <button
               className="neon-button"
               type="button"
-              disabled={busy || office.qwen.status !== "ready"}
+              disabled={busy || !brief.trim()}
               onClick={onRun}
             >
               <Play size={15} /> Run office
