@@ -364,6 +364,59 @@ export function createApplication(config: Config) {
       revision: row.revision + 1,
     });
   });
+  const officeLink = z
+    .object({
+      missionId: z.string().trim().min(1).max(180),
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict();
+  app.post("/api/office/link", auth, (req, res) => {
+    const parsed = officeLink.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid ORBIT mission link" });
+    const row = db
+      .prepare("SELECT payload,revision FROM workspaces WHERE owner_id=?")
+      .get("owner") as { payload: string; revision: number };
+    if (row.revision !== parsed.data.revision)
+      return res
+        .status(409)
+        .json({ error: "Workspace changed. Reload first." });
+    const workspace = workspaceSchema.parse(JSON.parse(row.payload));
+    const mission = workspace.trading?.agentMissions.find(
+      (item) => item.id === parsed.data.missionId,
+    );
+    if (
+      !mission ||
+      (mission.status !== "owner_gate" && mission.status !== "accepted")
+    )
+      return res.status(423).json({
+        error:
+          "Only an audit-passed ORBIT mission at the owner gate can be linked.",
+      });
+    const office = officeWorkspaceSchema.parse(
+      workspace.office || emptyOfficeWorkspace(),
+    );
+    const linkedOffice = officeWorkspaceSchema.parse({
+      ...office,
+      orbit: {
+        missionId: mission.id,
+        status: "linked",
+        detail: `Linked to ORBIT mission ${mission.id}.`,
+        linkedAt: new Date(now()).toISOString(),
+      },
+    });
+    const nextWorkspace = { ...workspace, office: linkedOffice };
+    const changed = db
+      .prepare(
+        "UPDATE workspaces SET payload=?,revision=revision+1 WHERE owner_id=? AND revision=?",
+      )
+      .run(JSON.stringify(nextWorkspace), "owner", row.revision);
+    if (!changed.changes)
+      return res
+        .status(409)
+        .json({ error: "Workspace changed. Reload first." });
+    res.json({ office: linkedOffice, revision: row.revision + 1 });
+  });
   app.get("/api/billing/summary", auth, (_req, res) => {
     const subscriptions = db
       .prepare(

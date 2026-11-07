@@ -105,6 +105,15 @@ export const qwenStatusSchema = z
   })
   .strict();
 
+export const orbitLinkSchema = z
+  .object({
+    missionId: text.optional(),
+    status: z.enum(["not_linked", "linked", "blocked"]),
+    detail: text,
+    linkedAt: timestamp.optional(),
+  })
+  .strict();
+
 const defaultAgents: ReadonlyArray<[OfficeAgentId, string, string]> = [
   ["research", "Research", "Evidence and source collection"],
   ["audience", "Audience", "Audience needs and content fit"],
@@ -130,6 +139,7 @@ export const officeWorkspaceSchema = z
   .object({
     channel: z.literal("tiktok_youtube"),
     currentStage: officeStageSchema,
+    orbit: orbitLinkSchema.optional(),
     agents: z.array(officeAgentSchema).length(18),
     connectors: z.array(officeConnectorSchema).length(5),
     handoffs: z.array(officeHandoffSchema).max(5000),
@@ -180,6 +190,10 @@ export type OfficeConnector = z.infer<typeof officeConnectorSchema>;
 export const emptyOfficeWorkspace = (): OfficeWorkspace => ({
   channel: "tiktok_youtube",
   currentStage: "intake",
+  orbit: {
+    status: "not_linked",
+    detail: "Link an audit-passed ORBIT mission before content creation.",
+  },
   agents: defaultAgents.map(([id, name, specialty]) => ({
     id,
     name,
@@ -240,6 +254,8 @@ const stageConnector: Partial<Record<OfficeStage, OfficeConnector["id"]>> = {
   revenue_review: "revenue",
 };
 
+const orbitRequiredFrom: OfficeStage = "creation";
+
 export function requiredConnector(stage: OfficeStage) {
   return stageConnector[stage] || null;
 }
@@ -270,6 +286,15 @@ export function advanceOfficeStage(
     return {
       office,
       blocked: `${connector.label} is ${connector.status}; configure a real adapter before advancing.`,
+    };
+  if (
+    stages.indexOf(nextStage) >= stages.indexOf(orbitRequiredFrom) &&
+    office.orbit?.status !== "linked"
+  )
+    return {
+      office,
+      blocked:
+        "An audit-passed ORBIT mission must be linked before the office can enter content creation.",
     };
   const next = structuredClone(office);
   next.currentStage = nextStage;

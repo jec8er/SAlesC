@@ -398,6 +398,45 @@ export default function Studio({
     }
   }
 
+  async function linkOfficeToMission() {
+    if (!missionForSelected) {
+      setView("command");
+      setError("Create and audit an ORBIT mission before linking the office.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/office/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ missionId: missionForSelected.id, revision }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        office?: OfficeWorkspace;
+        revision?: number;
+      };
+      if (response.status === 401)
+        window.dispatchEvent(new Event("session-expired"));
+      if (!response.ok)
+        throw Error(data.error || "Unable to link ORBIT mission");
+      if (data.office && data.revision !== undefined) {
+        setWorkspace((current) =>
+          workspaceSchema.parse({ ...current, office: data.office }),
+        );
+        setRevision(data.revision);
+        setToast("ORBIT mission linked to the content office");
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to link ORBIT mission",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createStrategy(form: HTMLFormElement) {
     const data = new FormData(form),
       value = (key: string) => String(data.get(key) || "").trim();
@@ -921,8 +960,10 @@ export default function Studio({
             {view === "office" && (
               <OfficePanel
                 office={office}
+                mission={missionForSelected}
                 busy={busy}
                 onAdvance={() => void advanceOffice()}
+                onLink={() => void linkOfficeToMission()}
               />
             )}
             {view === "command" && (
@@ -979,6 +1020,73 @@ export default function Studio({
                         </span>
                       );
                     })}
+                  </div>
+                </section>
+                <section className="glass-panel orbit-office-floor">
+                  <div className="panel-head">
+                    <div>
+                      <p className="signal-label">ORBIT OFFICE / LIVE FLOOR</p>
+                      <h2>One room. Two operating lanes.</h2>
+                    </div>
+                    <span className="status-chip live">
+                      {office.orbit?.status === "linked"
+                        ? "MISSION LINKED"
+                        : "PAPER CONTROL"}
+                    </span>
+                  </div>
+                  <p className="panel-copy">
+                    The market team and the content team work from the same
+                    evidence trail. ORBIT agents authorize the room; the 18
+                    specialist desks stay blocked when connectors or evidence
+                    are missing.
+                  </p>
+                  <div className="office-floor-grid">
+                    <div className="office-lane">
+                      <div className="office-lane-head">
+                        <span className="signal-label">MARKET LANE</span>
+                        <small>6 core agents</small>
+                      </div>
+                      <div className="office-desk-grid">
+                        {agents.map((agent) => {
+                          const Icon = agent.icon;
+                          const last = agentStates.get(agent.id);
+                          return (
+                            <div className="office-desk" key={agent.id}>
+                              <Icon size={16} />
+                              <strong>{agent.name}</strong>
+                              <small>{last?.status || "idle"}</small>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="office-lane content-lane">
+                      <div className="office-lane-head">
+                        <span className="signal-label">CONTENT LANE</span>
+                        <small>18 specialist agents</small>
+                      </div>
+                      <div className="content-office-summary">
+                        <strong>
+                          {office.currentStage.replaceAll("_", " ")}
+                        </strong>
+                        <span>
+                          {office.handoffs.length} handoffs ·{" "}
+                          {
+                            office.connectors.filter(
+                              (connector) => connector.status === "ready",
+                            ).length
+                          }{" "}
+                          connectors ready
+                        </span>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() => setView("office")}
+                        >
+                          Open content office <ChevronRight size={15} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </section>
                 <section className="metric-strip">
@@ -2286,12 +2394,16 @@ function PageTitle({
 }
 function OfficePanel({
   office,
+  mission,
   busy,
   onAdvance,
+  onLink,
 }: {
   office: OfficeWorkspace;
+  mission: AgentMission | undefined;
   busy: boolean;
   onAdvance: () => void;
+  onLink: () => void;
 }) {
   const stages = officeStageSchema.options;
   const currentIndex = stages.indexOf(office.currentStage);
@@ -2331,6 +2443,43 @@ function OfficePanel({
           value={String(office.rewards.length)}
           note="Only verified payouts qualify"
         />
+      </section>
+      <section className="glass-panel">
+        <div className="panel-head">
+          <div>
+            <p className="signal-label">ORBIT CONTROL PLANE</p>
+            <h2>Content work stays inside an audited mission</h2>
+          </div>
+          <span
+            className={`status-chip ${
+              office.orbit?.status === "linked" ? "live" : "paused"
+            }`}
+          >
+            {office.orbit?.status === "linked" ? "LINKED" : "NOT LINKED"}
+          </span>
+        </div>
+        <p className="panel-copy">
+          The office can research independently, but creation, review and
+          distribution require a real ORBIT mission that reached the owner gate.
+        </p>
+        <div className="inline-actions">
+          <span className="muted">
+            {office.orbit?.missionId
+              ? `Mission ${office.orbit.missionId}`
+              : "No ORBIT mission linked"}
+          </span>
+          {office.orbit?.status !== "linked" && (
+            <button
+              className="ghost-button"
+              onClick={onLink}
+              disabled={busy || !mission}
+            >
+              {mission
+                ? "Link selected ORBIT mission"
+                : "No audit-passed mission"}
+            </button>
+          )}
+        </div>
       </section>
       <section className="dashboard-grid">
         <section className="glass-panel">

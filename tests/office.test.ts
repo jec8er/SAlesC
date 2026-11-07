@@ -39,6 +39,25 @@ test("distribution is blocked until both platform adapters are ready", () => {
   assert.match(result.blocked || "", /YouTube/);
 });
 
+test("content creation is blocked until an audited ORBIT mission is linked", () => {
+  let office = emptyOfficeWorkspace();
+  office.currentStage = "research";
+  let result = advanceOfficeStage(office, "2026-11-06T00:00:00.000Z");
+  assert.match(result.blocked || "", /ORBIT mission/);
+  office = {
+    ...office,
+    orbit: {
+      missionId: "mission-1",
+      status: "linked",
+      detail: "Linked to ORBIT mission mission-1.",
+      linkedAt: "2026-11-06T00:00:00.000Z",
+    },
+  };
+  result = advanceOfficeStage(office, "2026-11-06T00:00:00.000Z");
+  assert.equal(result.blocked, null);
+  assert.equal(result.office.currentStage, "creation");
+});
+
 test("rewards cannot be created without verified revenue evidence", () => {
   const office = emptyOfficeWorkspace();
   assert.throws(
