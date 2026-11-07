@@ -79,10 +79,11 @@ export function createSetupServer({ root, onConfigured = () => {} }) {
           blockedUntil = Date.now() + 900000;
           failures = 0;
         }
-        return reply(400, { error: "Use matching passwords of 12–512 characters" });
+        return reply(400, { error: "Passwords must match (12–512 characters)" });
       }
       const salt = randomBytes(16).toString("hex");
-      const hash = `scrypt-v1:${salt}:${scryptSync(data.password, salt, 64).toString("hex")}`;
+      const key = scryptSync(data.password, salt, 64).toString("hex");
+      const hash = `scrypt-v1:${salt}:${key}`;
       writeFileSync(
         envPath,
         `OWNER_PASSWORD_HASH=${hash}\nOWNER_NAME=Juan\nDATABASE_PATH=data/studio.sqlite\nHOST=127.0.0.1\nPORT=3001\nOLLAMA_AUTO_DISCOVER=false\n`,
@@ -92,7 +93,7 @@ export function createSetupServer({ root, onConfigured = () => {} }) {
       reply(201, { configured: true });
       onConfigured();
     } catch {
-      reply(400, { error: "Setup failed; existing configuration was preserved" });
+      reply(400, { error: "Setup failed; configuration preserved" });
     }
   });
   server.requestTimeout = 10000;
