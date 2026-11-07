@@ -15,7 +15,8 @@
     "password:hash": "node scripts/password-hash.mjs",
     "setup": "node scripts/setup.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "start:local": "node scripts/local-start.mjs"
   },
   "dependencies": {
     "express": "5.3.0",
