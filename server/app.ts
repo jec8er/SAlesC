@@ -444,22 +444,19 @@ export function createApplication(config: Config) {
       workspace.office || emptyOfficeWorkspace(),
     );
     const qwen = config.qwenAdapter?.status() || office.qwen;
-    res.json({
-      office: { ...office, qwen },
-      revision: row.revision,
-      connectors: office.connectors.map((connector) =>
-        connector.id === "qwen"
-          ? {
-              ...connector,
-              status: qwen.status === "ready" ? "ready" : qwen.status,
-              detail:
-                qwen.status === "ready"
-                  ? "Local Qwen adapter is configured."
-                  : "Local Qwen adapter is not configured.",
-            }
-          : connector,
-      ),
-    });
+    const connectors = office.connectors.map((connector) =>
+      connector.id === "qwen"
+        ? {
+            ...connector,
+            status: qwen.status === "ready" ? "ready" : qwen.status,
+            detail:
+              qwen.status === "ready"
+                ? "Local Qwen adapter is configured."
+                : "Local Qwen adapter is not configured.",
+          }
+        : connector,
+    );
+    res.json({ office: { ...office, qwen, connectors }, revision: row.revision });
   });
   const officeAdvance = z
     .object({
