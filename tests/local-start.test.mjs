@@ -22,7 +22,9 @@ test("local launcher starts without setup or creating a password", async () => {
       writeFileSync('launched.json', JSON.stringify({
         passwordless: process.env.ORBIT_LOCAL_PASSWORDLESS,
         host: process.env.HOST,
-        inference: process.env.OLLAMA_AUTO_DISCOVER
+        inference: process.env.OLLAMA_AUTO_DISCOVER,
+        ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
+        cloudQwenEndpoint: process.env.QWEN_LOCAL_ENDPOINT
       }));
     `,
     );
@@ -34,7 +36,9 @@ test("local launcher starts without setup or creating a password", async () => {
       {
         passwordless: "true",
         host: "127.0.0.1",
-        inference: "false",
+        inference: "true",
+        ollamaBaseUrl: "http://127.0.0.1:11434",
+        cloudQwenEndpoint: "",
       },
     );
     await assert.rejects(readFile(join(root, ".env")));
