@@ -22,6 +22,7 @@ For frontend development, after setup use `npm run dev`. Open the Vite URL print
 - Owner-password sign-in with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
 - Durable SQLite records with atomic revision checks: conflicting edits cannot silently overwrite one another.
 - A six-agent command center: Scout, Strategist, Risk, Compliance, Executor and Auditor.
+- An evidence-bound content office with 18 specialist agents for TikTok and YouTube, linked to audit-passed ORBIT missions before creation, review or distribution.
 - ORBIT Intelligence V1: a local, deterministic multi-agent council that independently scores evidence, strategy quality, risk, compliance, execution history and audit consistency.
 - Agent Operations V2: a mission board that preserves the ordered Scout → Strategist → Risk → Compliance → Executor → Auditor handoff, exposes each output and evidence reference, and withholds the owner gate when audit findings remain.
 - Local browser voice briefings for mission summaries. Audio uses the device speech engine; no mission data is sent to an AI or speech provider by ORBIT.
