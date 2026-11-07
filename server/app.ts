@@ -456,7 +456,10 @@ export function createApplication(config: Config) {
           }
         : connector,
     );
-    res.json({ office: { ...office, qwen, connectors }, revision: row.revision });
+    res.json({
+      office: { ...office, qwen, connectors },
+      revision: row.revision,
+    });
   });
   const officeAdvance = z
     .object({
