@@ -22,7 +22,6 @@ test("local launcher starts without setup or creating a password", async () => {
       writeFileSync('launched.json', JSON.stringify({
         passwordless: process.env.ORBIT_LOCAL_PASSWORDLESS,
         host: process.env.HOST,
-        inference: process.env.OLLAMA_AUTO_DISCOVER
       }));
     `,
     );
@@ -34,7 +33,6 @@ test("local launcher starts without setup or creating a password", async () => {
       {
         passwordless: "true",
         host: "127.0.0.1",
-        inference: "false",
       },
     );
     await assert.rejects(readFile(join(root, ".env")));
@@ -84,7 +82,6 @@ test("local setup saves only a compatible password hash and cannot be reused", a
   assert.equal(response.status, 201);
   const env = await readFile(join(f.root, ".env"), "utf8");
   assert.ok(!env.includes(password));
-  assert.match(env, /OLLAMA_AUTO_DISCOVER=false/);
   const hash = env.match(/OWNER_PASSWORD_HASH=(.+)/)[1];
   const [version, salt, key] = hash.split(":");
   assert.equal(version, "scrypt-v1");

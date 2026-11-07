@@ -86,7 +86,7 @@ export function createSetupServer({ root, onConfigured = () => {} }) {
       const hash = `scrypt-v1:${salt}:${key}`;
       writeFileSync(
         envPath,
-        `OWNER_PASSWORD_HASH=${hash}\nOWNER_NAME=Juan\nDATABASE_PATH=data/studio.sqlite\nHOST=127.0.0.1\nPORT=3001\nOLLAMA_AUTO_DISCOVER=false\n`,
+        `OWNER_PASSWORD_HASH=${hash}\nOWNER_NAME=Juan\nDATABASE_PATH=data/studio.sqlite\nHOST=127.0.0.1\nPORT=3001\n`,
         { flag: "wx", mode: 0o600 },
       );
       configured = true;
@@ -146,11 +146,6 @@ export function startLocal(
           NODE_ENV: "development",
           PUBLIC_ORIGIN: "",
           ORBIT_LOCAL_PASSWORDLESS: "true",
-          OLLAMA_AUTO_DISCOVER: "false",
-          OLLAMA_MODEL: "",
-          QWEN_LOCAL_ENDPOINT: "",
-          QWEN_MODEL: "",
-          QWEN_API_KEY: "",
         },
       },
     );

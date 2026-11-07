@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { officeWorkspaceSchema } from "./office.ts";
 const text = z.string().trim().min(1).max(180);
 const money = z.number().finite().min(0).max(100000000);
 export const businessSchema = z
@@ -419,7 +418,6 @@ export const workspaceSchema = z
     deals: z.array(dealSchema).max(1000),
     receipts: z.array(receiptSchema).max(1000),
     trading: tradingSchema.optional(),
-    office: officeWorkspaceSchema.optional(),
     settings: z
       .object({
         setupPrice: money,
@@ -521,7 +519,6 @@ export const emptyWorkspace = (): Workspace => ({
   deals: [],
   receipts: [],
   trading: emptyTradingWorkspace(),
-  office: undefined,
   settings: {
     setupPrice: 199,
     monthlyPrice: 39,
