@@ -4,7 +4,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { scryptSync } from "node:crypto";
-import { createSetupServer } from "../scripts/local-start.mjs";
+import { EventEmitter } from "node:events";
+import {
+  createSetupServer,
+  superviseChild,
+} from "../scripts/local-start.mjs";
 
 async function fixture(t) {
   const prefix = join(tmpdir(), "orbit-setup-");
@@ -108,4 +112,31 @@ test("local setup never replaces an existing environment file", async (t) => {
     await readFile(join(f.root, ".env"), "utf8"),
     "EXISTING_CONFIGURATION=true\n",
   );
+});
+
+test("launcher forwards shutdown once and waits for the child to exit", () => {
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    const host = new EventEmitter();
+    const child = new EventEmitter();
+    const signals = [];
+    child.kill = (value) => signals.push(value);
+    assert.equal(superviseChild(child, host), child);
+    host.emit(signal);
+    host.emit(signal);
+    assert.deepEqual(signals, [signal]);
+    assert.equal(host.exitCode, undefined);
+    child.emit("exit", null);
+    assert.equal(host.exitCode, 0);
+    assert.equal(host.listenerCount("SIGINT"), 0);
+    assert.equal(host.listenerCount("SIGTERM"), 0);
+  }
+});
+
+test("launcher preserves application failures", () => {
+  const host = new EventEmitter();
+  const child = new EventEmitter();
+  superviseChild(child, host);
+  child.emit("exit", 2);
+  assert.equal(host.exitCode, 2);
+  assert.equal(host.listenerCount("SIGTERM"), 0);
 });
