@@ -62,7 +62,12 @@ import {
   type OfficeWorkspace,
 } from "../lib/office";
 
-const nav = [["office", "Content office", Bot]] as const;
+const nav = [
+  ["office", "Agent world", Bot],
+  ["command", "Command center", Gauge],
+  ["strategies", "Strategies", Target],
+  ["agents", "Mission control", BrainCircuit],
+] as const;
 type View =
   | "command"
   | "office"
@@ -287,10 +292,14 @@ export default function Studio({
             office: OfficeWorkspace;
             revision: number;
           };
-          setWorkspace((current) =>
-            workspaceSchema.parse({ ...current, office: officeData.office }),
-          );
-          setRevision(officeData.revision);
+          if (officeData.revision === data.revision) {
+            setWorkspace(
+              workspaceSchema.parse({
+                ...data.workspace,
+                office: officeData.office,
+              }),
+            );
+          }
         }
       } catch {
         // The workspace remains usable when the optional office status surface is unavailable.
@@ -368,6 +377,10 @@ export default function Studio({
   }
 
   async function advanceOffice() {
+    if (demo) {
+      setError("Exit demo before changing the saved office.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -401,6 +414,10 @@ export default function Studio({
   }
 
   async function runOffice() {
+    if (demo) {
+      setError("Exit demo before changing the saved office.");
+      return;
+    }
     if (!officeBrief.trim()) {
       setError("Give the office a brief before starting a real model run.");
       return;
@@ -438,6 +455,10 @@ export default function Studio({
   }
 
   async function linkOfficeToMission() {
+    if (demo) {
+      setError("Exit demo before changing the saved office.");
+      return;
+    }
     if (!missionForSelected) {
       setView("office");
       setError("Create and audit an ORBIT mission before linking the office.");
