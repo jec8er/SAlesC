@@ -101,6 +101,33 @@ export function createSetupServer({ root, onConfigured = () => {} }) {
   return server;
 }
 
+export function superviseChild(child, host = process) {
+  let stopping = false;
+  const stop = (signal) => {
+    if (stopping) return;
+    stopping = true;
+    child.kill(signal);
+  };
+  const interrupt = () => stop("SIGINT");
+  const terminate = () => stop("SIGTERM");
+  const cleanup = () => {
+    host.removeListener("SIGINT", interrupt);
+    host.removeListener("SIGTERM", terminate);
+  };
+  host.on("SIGINT", interrupt);
+  host.on("SIGTERM", terminate);
+  child.on("error", () => {
+    cleanup();
+    host.exitCode = 1;
+    console.error("Unable to start ORBIT");
+  });
+  child.on("exit", (code) => {
+    cleanup();
+    host.exitCode = stopping ? 0 : (code ?? 1);
+  });
+  return child;
+}
+
 export function startLocal(
   root = resolve(dirname(fileURLToPath(import.meta.url)), ".."),
 ) {
@@ -126,10 +153,7 @@ export function startLocal(
         },
       },
     );
-    child.on("error", () => console.error("Unable to start ORBIT"));
-    child.on("exit", (code) => {
-      process.exitCode = code ?? 1;
-    });
+    return superviseChild(child);
   };
   if (existsSync(resolve(root, ".env"))) return launch();
   const setup = createSetupServer({
