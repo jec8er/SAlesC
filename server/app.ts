@@ -1,3 +1,4 @@
+import { createServiceWorker } from "./service-worker.mjs";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { DatabaseSync } from "node:sqlite";
@@ -80,6 +81,14 @@ export function createApplication(config: Config) {
   db.prepare(
     "INSERT OR IGNORE INTO workspaces(owner_id,payload,revision) VALUES(?,?,0)",
   ).run("owner", JSON.stringify(emptyWorkspace()));
+  const serviceWorker = createServiceWorker({
+    db,
+    infer: config.ecomodaInfer,
+    store: config.ecomodaStore,
+    now,
+    timeoutMs: ecomodaTimeoutMs,
+  });
+  if (config.ecomodaInfer && config.ecomodaStore) serviceWorker.start();
   const app = express();
   app.disable("x-powered-by");
   app.use((req, res, next) => {
@@ -655,6 +664,33 @@ export function createApplication(config: Config) {
       subscriptions,
     });
   });
+  app.get("/api/services/status", auth, (_req, res) => {
+    res.json(serviceWorker.summary());
+  });
+  const serviceRequest = z.object({
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/),
+    brief: z.string().trim().min(1).max(20000),
+  }).strict();
+  app.post("/api/services/jobs", auth, (req, res) => {
+    if (!config.ecomodaInfer || !config.ecomodaStore)
+      return res.status(503).json({ error: "Qwen service engine is not connected" });
+    const parsed = serviceRequest.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid service request" });
+    try {
+      res.status(202).json({ job: serviceWorker.enqueue(parsed.data.id, parsed.data.brief) });
+    } catch {
+      res.status(409).json({ error: "Service request ID already used" });
+    }
+  });
+  app.get("/api/services/jobs/:id", auth, (req, res) => {
+    const id = req.params.id;
+    if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(id))
+      return res.status(400).json({ error: "Invalid service request ID" });
+    const job = serviceWorker.inspect(id);
+    if (!job) return res.status(404).json({ error: "Service request not found" });
+    res.json({ job });
+  });
   const projectId = /^[a-z0-9][a-z0-9_-]{0,79}$/;
   app.get("/api/ecomoda/memory/:projectId", auth, async (req, res, next) => {
     if (!config.ecomodaMemory)
@@ -826,5 +862,5 @@ export function createApplication(config: Config) {
       .status(500)
       .json({ error: "Server error. Changes have not been saved." });
   });
-  return { app, close: () => db.close() };
+  return { app, close: async () => { await serviceWorker.stop(); db.close(); } };
 }
