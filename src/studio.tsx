@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import BusinessFactory from "./business-factory";
 import {
   Activity,
   Accessibility,
@@ -1444,6 +1445,7 @@ export default function Studio({
                 )}
               </>
             )}
+            {view === "factory" && <BusinessFactory csrf={csrf} />}
             {view === "agents" && (
               <>
                 <PageTitle
