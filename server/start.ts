@@ -27,6 +27,20 @@ const billing = stripeValues.every(Boolean)
       },
     })
   : undefined;
+const qwenAdapter =
+  !process.env.QWEN_LOCAL_ENDPOINT &&
+  !process.env.QWEN_MODEL &&
+  process.env.OLLAMA_AUTO_DISCOVER !== "false"
+    ? createOllamaAdapter({
+        baseUrl: process.env.OLLAMA_BASE_URL,
+        model: process.env.OLLAMA_MODEL,
+      })
+    : createQwenAdapter({
+        endpoint: process.env.QWEN_LOCAL_ENDPOINT,
+        model: process.env.QWEN_MODEL,
+        apiKey: process.env.QWEN_API_KEY,
+      });
+
 const { app, close } = createApplication({
   databasePath: process.env.DATABASE_PATH || "data/studio.sqlite",
   passwordHash: process.env.OWNER_PASSWORD_HASH || "",
@@ -39,19 +53,8 @@ const { app, close } = createApplication({
   ecomodaMemory: createProjectMemoryStore(
     process.env.ECOMODA_MEMORY_DIR || "data/ecomoda-memory",
   ),
-  qwenAdapter:
-    !process.env.QWEN_LOCAL_ENDPOINT &&
-    !process.env.QWEN_MODEL &&
-    process.env.OLLAMA_AUTO_DISCOVER !== "false"
-      ? createOllamaAdapter({
-          baseUrl: process.env.OLLAMA_BASE_URL,
-          model: process.env.OLLAMA_MODEL,
-        })
-      : createQwenAdapter({
-          endpoint: process.env.QWEN_LOCAL_ENDPOINT,
-          model: process.env.QWEN_MODEL,
-          apiKey: process.env.QWEN_API_KEY,
-        }),
+  qwenAdapter,
+  ecomodaInfer: qwenAdapter.infer,
   billing,
 });
 const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
