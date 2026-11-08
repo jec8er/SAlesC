@@ -18,6 +18,8 @@ Password-free access is available only through the local launcher. Public/produc
 
 For frontend development, after setup use `npm run dev`. Open the Vite URL printed in the terminal; it proxies `/api` to the Express server. Both processes stop together.
 
+Static Netlify and Vercel deployments are design previews only. Deep links such as `/pricing` route to the React application, while Netlify returns an explicit unavailable response for `/api/*`. The complete authenticated workspace requires the independent Express server and persistent SQLite storage described below.
+
 ## Features
 
 - Direct local access without a password; owner-password sign-in for hosted mode, with server sessions, HttpOnly cookies, expiry, login throttling and CSRF checks.
